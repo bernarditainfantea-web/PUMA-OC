@@ -189,7 +189,7 @@ body.editor [data-ncdel]{display:none!important}
       <button class="btn" id="btnPass">Cambiar contraseña</button>
       <button class="btn" id="btnSalir">Salir</button>
       <button class="btn" id="btnExport" hidden>Descargar Excel</button>
-      <button class="btn primary" id="btnIrCargar">Nuevo evento</button>
+      <button class="btn primary" id="btnIrCargar">Nuevo sugerido</button>
     </div>
   </header>
 
@@ -290,7 +290,7 @@ function demo(){
         if(dq) desp.push([cli,ocn,sku,t,dq,precio]);
       });
     });
-    add("demo-sug-"+ci,{tipo:"sugerido",ocLbl:"Evento ejemplo "+(ci?"B":"A"),cliente:cli,fecha:"2026-09-01",archivo:"sugerido_"+(ci?"B":"A")+"_temporada.xlsx",creado:"2026-09-01"},sug);
+    add("demo-sug-"+ci,{tipo:"sugerido",ocLbl:"Sugerido ejemplo "+(ci?"B":"A"),cliente:cli,fecha:"2026-09-01",archivo:"sugerido_"+(ci?"B":"A")+"_temporada.xlsx",creado:"2026-09-01"},sug);
     ocs.forEach(([ocn,f,v])=>{ if(oc[ocn]) add("demo-oc-"+ocn,{tipo:"oc",sugerido_id:"demo-sug-"+ci,cliente:cli,ocLbl:ocn,ocs:[cli+"|"+ocn],fecha:f,vence:v,archivo:ocn+".xlsx",creado:f},oc[ocn]); });
     add("demo-desp-"+ci,{tipo:"despacho",cliente:cli,fecha:"2026-10-01",archivo:"despacho_"+(ci?"B":"A")+"_01-10.xlsx",creado:"2026-10-01"},desp);
     if(pend.length) add("demo-desp2-"+ci,{tipo:"despacho",cliente:cli,fecha:"2026-10-18",archivo:"despacho_A_18-10.xlsx",creado:"2026-10-18"},pend);
@@ -478,7 +478,7 @@ function sugeridos(){
 
 /* ---------- Render ---------- */
 let R=null;
-const TABS=[["resumen","Resumen"],["sugeridos","Eventos"],["ocs","Órdenes de compra"],["sku","Por SKU"],["talla","Por talla"],["nc","Notas de crédito"]];
+const TABS=[["resumen","Resumen"],["sugeridos","Sugeridos"],["ocs","Órdenes de compra"],["sku","Por SKU"],["talla","Por talla"],["nc","Notas de crédito"]];
 function render(){
   R=calcular();
   renderBanner(); renderFiltros(); renderTabs();
@@ -488,7 +488,7 @@ function render(){
 }
 function renderBanner(){
   let h="";
-  if(esDemo()) h+=`<div class="banner"><b>Datos de ejemplo.</b> Clientes, OCs, precios y notas de crédito inventados para mostrar cómo funciona. Desaparecen cuando creas tu primer evento.</div>`;
+  if(esDemo()) h+=`<div class="banner"><b>Datos de ejemplo.</b> Clientes, OCs, precios y notas de crédito inventados para mostrar cómo funciona. Desaparecen cuando creas tu primer sugerido.</div>`;
   if(S.errDb) h+=`<div class="banner" style="margin-top:8px"><b>Algo falló.</b> ${esc(S.errDb)}</div>`;
   if(S.rol==="lector") h+=`<div class="banner" style="margin-top:8px"><b>Acceso de solo lectura.</b> Puedes revisar todo, pero no subir archivos ni cambiar estados.</div>`;
   $("#banner").innerHTML=h;
@@ -524,7 +524,7 @@ const qmatch=(...xs)=>{const q=S.filtros.q.trim().toUpperCase(); return !q||xs.s
 
 function vResumen(){
   const {T,A,u,skuList}=R;
-  if(!R.L.length) return `<div class="panel empty">${R.pendientes.size?`Hay ${R.pendientes.size} OC cargada${R.pendientes.size>1?"s":""} sin despacho. Carga sus despachos desde el detalle de cada OC para medir el fill rate.`:`No hay órdenes de compra para este filtro. Crea un evento y carga sus OCs para empezar a medir.`}</div>`;
+  if(!R.L.length) return `<div class="panel empty">${R.pendientes.size?`Hay ${R.pendientes.size} OC cargada${R.pendientes.size>1?"s":""} sin despacho. Carga sus despachos desde el detalle de cada OC para medir el fill rate.`:`No hay órdenes de compra para este filtro. Crea un sugerido y carga sus OCs para empezar a medir.`}</div>`;
   const kp=(lbl,v,cls,d)=>`<div class="kpi"><span class="label">${lbl}</span><span class="v ${cls}">${v}</span><span class="d">${d}</span></div>`;
   const al=S.verTodas?A:A.slice(0,10);
   const worst=skuList.filter(o=>o.ocQ).sort((a,b)=>a.fr-b.fr||b.falta-a.falta).slice(0,8);
@@ -615,7 +615,7 @@ function vOcs(){
   if(S.det.ocs&&R.ocs.has(S.det.ocs)) return vOcDetalle(R.ocs.get(S.det.ocs));
   S.det.ocs=null;
   const {ocList,u}=R;
-  if(!ocList.length) return `<div class="panel empty">Todavía no hay órdenes de compra. Créalas dentro de un evento, en la pestaña <b>Eventos</b>.</div>`;
+  if(!ocList.length) return `<div class="panel empty">Todavía no hay órdenes de compra. Créalas dentro de un sugerido, en la pestaña <b>Sugeridos</b>.</div>`;
   const cnt={}; for(const o of ocList) cnt[o.estado]=(cnt[o.estado]||0)+1;
   const list=ocList.filter(o=>(!S.ocEstado||o.estado===S.ocEstado)&&qmatch(o.oc,o.cliente));
   const tot=list.reduce((a,o)=>(a.oc+=o.montoOc,a.ent+=o.montoEnt,a.nc+=o.nc.monto,a),{oc:0,ent:0,nc:0});
@@ -646,7 +646,7 @@ function vOcDetalle(o){
   <section class="panel">
     <div class="dh"><div><div class="label">Orden de compra · ${esc(o.cliente)}</div><h2 style="font-size:30px">${esc(o.oc)}</h2>
       <div class="muted small">Emitida ${fdate(o.fecha)} · Fecha límite ${fdate(o.vence)} · ${o.lineas} líneas SKU-talla</div>
-      <div class="field" style="margin-top:8px;max-width:420px"><span class="label">Evento</span>${selSugerido(o.cliente,sugeridoDeOc(o),`data-ocsug="${esc(o.key)}"`,esDemo())}</div></div>
+      <div class="field" style="margin-top:8px;max-width:420px"><span class="label">Sugerido</span>${selSugerido(o.cliente,sugeridoDeOc(o),`data-ocsug="${esc(o.key)}"`,esDemo())}</div></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${estOc(o.estado)}
         <label class="check" style="padding:0"><input type="checkbox" data-cerrar="${esc(o.key)}" ${o.cerrada?"checked":""}> OC cerrada</label>
         <button class="btn" data-act="nc-desde-oc" data-k="${esc(o.key)}" ${esDemo()?"disabled title=\"Sube tus OCs para crear notas de crédito\"":""}>Crear nota de crédito</button></div></div>
@@ -676,17 +676,17 @@ function vOcDetalle(o){
 /* Selector de sugerido para una OC: opciones = sugeridos del mismo cliente */
 function selSugerido(cliente,actual,attrs,disabled){
   const sc=R.cargas.filter(c=>c.tipo==="sugerido"&&(c.cliente===cliente||(c.clientes||[]).includes(cliente))).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
-  return `<select ${attrs} ${disabled?"disabled":""}><option value="">Sin evento</option>${sc.map(c=>`<option value="${esc(c.id)}" ${c.id===actual.id?"selected":""}>${esc(nombreEvento(c))} · ${fdate(c.fecha)}${c.id===actual.id&&actual.auto?" (asignado por fecha)":""}</option>`).join("")}</select>`;
+  return `<select ${attrs} ${disabled?"disabled":""}><option value="">Sin sugerido</option>${sc.map(c=>`<option value="${esc(c.id)}" ${c.id===actual.id?"selected":""}>${esc(nombreEvento(c))} · ${fdate(c.fecha)}${c.id===actual.id&&actual.auto?" (asignado por fecha)":""}</option>`).join("")}</select>`;
 }
 function archivosEvento(s){
   const keys=new Set(s.ocs.map(o=>o.key)), ids=new Set(s.ocs.flatMap(o=>o.cargaIds));
   const arch=[s.c,...R.cargas.filter(c=>ids.has(c.id)),...R.cargas.filter(c=>c.tipo==="despacho"&&(c.ocs||[]).some(k=>keys.has(k)))];
   const demo=esDemo();
-  return `<section class="panel"><div class="panel-h"><h2>Archivos del evento</h2><span class="muted small">${arch.length} archivos</span></div>
+  return `<section class="panel"><div class="panel-h"><h2>Archivos del sugerido</h2><span class="muted small">${arch.length} archivos</span></div>
   <div class="hist">${arch.map(c=>`<div class="hrow"><span class="pill">${TIPO_LBL[c.tipo]}</span><div style="min-width:0"><div><b>${esc(c.tipo==="sugerido"?nombreEvento(c):c.ocLbl||c.archivo)}</b></div><div class="small muted">${esc(c.archivo)} · ${fdate(c.fecha)} · ${fmtN(c.filas)} líneas · ${fmtN(c.unidades)} uds${c.monto?" · "+fmt$(c.monto):""}</div></div>
-    ${demo?"":`<button class="btn danger ${S.armado===c.id?"armed":""}" data-del="${esc(c.id)}">${S.armado===c.id?(c.tipo==="sugerido"?"Confirmar: sus OCs quedan sin evento":"Confirmar"):"Eliminar"}</button>`}</div>`).join("")}</div></section>`;
+    ${demo?"":`<button class="btn danger ${S.armado===c.id?"armed":""}" data-del="${esc(c.id)}">${S.armado===c.id?(c.tipo==="sugerido"?"Confirmar: sus OCs quedan sin sugerido":"Confirmar"):"Eliminar"}</button>`}</div>`).join("")}</div></section>`;
 }
-const nombreEvento=c=>c?(c.ocLbl||c.oc_lbl||(c.archivo||"Evento").replace(/\.[^.]+$/,"")):"";
+const nombreEvento=c=>c?(c.ocLbl||c.oc_lbl||(c.archivo||"Sugerido").replace(/\.[^.]+$/,"")):"";
 /* ---------- Sugeridos ---------- */
 function embudo(s){
   const max=Math.max(s.T.sug,s.T.oc,1), w=v=>Math.max(0,Math.min(100,v/max*100));
@@ -700,13 +700,13 @@ function embudo(s){
 function vSugeridos(){
   const list=sugeridos().filter(s=>qmatch(s.c.archivo,...s.clientes));
   if(S.det.sugeridos){const s=list.find(x=>x.c.id===S.det.sugeridos); if(s) return vSugDetalle(s); S.det.sugeridos=null;}
-  const top=S.nuevoEvento?vNuevoEvento():`<div class="upload-only"><button class="btn primary" data-act="evento-nuevo">Nuevo evento</button></div>`;
-  if(!list.length) return `<div style="display:grid;gap:12px">${top}${S.nuevoEvento?"":`<div class="panel empty">Todavía no hay eventos. Crea el primero con el sugerido que le enviaste al cliente.</div>`}</div>`;
+  const top=S.nuevoEvento?vNuevoEvento():`<div class="upload-only"><button class="btn primary" data-act="evento-nuevo">Nuevo sugerido</button></div>`;
+  if(!list.length) return `<div style="display:grid;gap:12px">${top}${S.nuevoEvento?"":`<div class="panel empty">Todavía no hay sugeridos. Crea el primero con el Excel que le enviaste al cliente.</div>`}</div>`;
   const u=R.u;
   return `<div style="display:grid;gap:12px">
   ${top}
-  <p class="how">Cada evento parte con un sugerido y reúne las OCs que nacieron de él y lo que se ha despachado de cada una. <b>Avance</b> = unidades despachadas ÷ unidades sugeridas. Haz clic en un sugerido para ver el detalle.</p>
-  <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Evento</th><th class="r">Sugerido</th><th class="r">OCs</th><th class="r">En OC</th><th class="r">Comprado</th><th class="r">Despachado</th><th class="r">Fill rate</th><th class="r">Avance</th></tr></thead><tbody>
+  <p class="how">Cada sugerido reúne las OCs que nacieron de él y lo que se ha despachado de cada una. <b>Avance</b> = unidades despachadas ÷ unidades sugeridas. Haz clic en un sugerido para ver el detalle.</p>
+  <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Nombre</th><th class="r">Sugerido</th><th class="r">OCs</th><th class="r">En OC</th><th class="r">Comprado</th><th class="r">Despachado</th><th class="r">Fill rate</th><th class="r">Avance</th></tr></thead><tbody>
   ${list.map(s=>`<tr class="row" data-sug="${esc(s.c.id)}"><td class="mono">${fdate(s.c.fecha)}</td><td>${esc(s.clientes.join(", "))}</td><td><b>${esc(nombreEvento(s.c))}</b></td><td class="num r">${fmtN(s.T.sug)}</td><td class="num r">${s.ocs.length}${s.abiertas?` <span class="muted small">(${s.abiertas} abiertas)</span>`:""}</td><td class="num r">${fmtN(s.T.oc)}</td><td class="num r">${s.ocs.length?pct(s.conv,0):"—"}</td><td class="num r">${fmtN(s.T.ent)}</td><td class="r">${s.T.ent?frBar(s.fr,u):'<span class="muted small">—</span>'}</td><td class="num r"><b>${pct(s.avance,0)}</b></td></tr>`).join("")}
   </tbody></table></div></div>`;
 }
@@ -714,9 +714,9 @@ function vSugDetalle(s){
   const u=R.u;
   const sk=s.sk.slice().sort((a,b)=>(b.sug-a.sug)||(b.oc-a.oc));
   return `<div style="display:grid;gap:16px">
-  <div><button class="btn" data-act="volver-sug">← Todos los eventos</button></div>
+  <div><button class="btn" data-act="volver-sug">← Todos los sugeridos</button></div>
   <section class="panel">
-    <div><div class="label">Evento · ${esc(s.clientes.join(", "))}</div><h2 style="font-size:28px">${esc(nombreEvento(s.c))}</h2><div class="muted small">Sugerido ${esc(s.c.archivo||"")} enviado ${fdate(s.c.fecha)} · ${s.ocs.length} OC${s.ocs.length===1?"":"s"} asociada${s.ocs.length===1?"":"s"} · ${s.nSkus} SKUs sugeridos</div></div>
+    <div><div class="label">Sugerido · ${esc(s.clientes.join(", "))}</div><h2 style="font-size:28px">${esc(nombreEvento(s.c))}</h2><div class="muted small">Sugerido ${esc(s.c.archivo||"")} enviado ${fdate(s.c.fecha)} · ${s.ocs.length} OC${s.ocs.length===1?"":"s"} asociada${s.ocs.length===1?"":"s"} · ${s.nSkus} SKUs sugeridos</div></div>
     <div class="kpis">
       <div class="kpi"><span class="label">Comprado del sugerido</span><span class="v">${pct(s.conv,0)}</span><span class="d">${s.nSkus-s.noComprados} de ${s.nSkus} SKUs con OC</span></div>
       <div class="kpi"><span class="label">Fill rate de las OCs</span><span class="v ${s.T.ent?st(s.fr,u):""}">${s.T.ent?pct(s.fr):"—"}</span><span class="d">${fmtN(s.T.ent)} de ${fmtN(s.T.oc)} uds pedidas</span></div>
@@ -726,10 +726,10 @@ function vSugDetalle(s){
     ${embudo(s)}
   </section>
   ${loteVisible({sugId:s.c.id})?vLote():""}
-  <section class="panel"><div class="panel-h"><h2>OCs del evento</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">Para mover una OC a otro evento, ábrela.</span><button class="btn primary upload-only" data-act="lote-oc" data-k="${esc(s.c.id)}" ${esDemo()?'disabled title="Crea tu primer evento para usar esta opción"':""}>Cargar OCs</button><button class="btn upload-only" data-act="lote-desp-evento" data-k="${esc(s.c.id)}" ${esDemo()||!s.ocs.length?"disabled":""}>Cargar despachos</button></div></div>
+  <section class="panel"><div class="panel-h"><h2>OCs del sugerido</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">Para mover una OC a otro sugerido, ábrela.</span><button class="btn primary upload-only" data-act="lote-oc" data-k="${esc(s.c.id)}" ${esDemo()?'disabled title="Crea tu primer sugerido para usar esta opción"':""}>Cargar OCs</button><button class="btn upload-only" data-act="lote-desp-evento" data-k="${esc(s.c.id)}" ${esDemo()||!s.ocs.length?"disabled":""}>Cargar despachos</button></div></div>
     ${s.ocs.length?`<div class="tablewrap"><table><thead><tr><th>OC</th><th>Emisión</th><th>Fecha límite</th><th class="r">Uds</th><th class="r">Monto</th><th class="r">Despachado</th><th class="r">Fill rate</th><th>Último despacho</th><th>Estado</th></tr></thead><tbody>
     ${s.ocs.map(o=>`<tr class="row" data-oc-link="${esc(o.key)}"><td class="mono"><b>${esc(o.oc)}</b>${sugeridoDeOc(o).auto?' <span class="muted small" title="Asociada por fecha">(por fecha)</span>':""}</td><td class="mono">${fdate(o.fecha)}</td><td class="mono">${fdate(o.vence)}</td><td class="num r">${fmtN(o.ocQ)}</td><td class="num r">${o.montoOc?fmt$(o.montoOc):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.desp?frBar(o.fr,u):'<span class="muted">—</span>'}</td><td class="mono">${fdate(o.ultimoDesp)}</td><td>${estOc(o.estado)}</td></tr>`).join("")}
-    </tbody></table></div>`:`<div class="muted small">Todavía no hay OCs en este evento. Usa <b>Cargar OCs</b> para subir una o varias.</div>`}
+    </tbody></table></div>`:`<div class="muted small">Todavía no hay OCs en este sugerido. Usa <b>Cargar OCs</b> para subir una o varias.</div>`}
   </section>
   ${archivosEvento(s)}
   <section class="panel"><h2>Por SKU</h2>
@@ -931,18 +931,18 @@ function vMapeo(U,modo){
       ${b.filas.slice(0,8).map(f=>`<tr><td>${esc(f[0])}</td>${U.tipo==="sugerido"?"":`<td class="mono">${esc(f[1]||"(se cruza por SKU-talla)")}</td>`}<td class="mono">${esc(f[2])}</td><td class="mono">${esc(f[3])}</td><td class="num r">${fmtN(f[4])}</td><td class="num r">${f[5]?fmt$(f[5]):"—"}</td></tr>`).join("")}
       </tbody></table></div>`}
     ${U.msg?`<div class="msg ${U.msg[0]}">${esc(U.msg[1])}</div>`:""}
-    ${modo==="lote"?`<div class="formrow"><button class="btn primary" data-act="lote-listo">Listo</button><span class="muted small">Los cambios se aplican a este archivo de la lista.</span></div>`:`<div class="formrow"><button class="btn primary" data-act="guardar" ${b.errores.length||U.guardando?"disabled":""}>${U.guardando?"Guardando…":"Crear evento"}</button><button class="btn" data-act="cancelar">Cancelar</button></div>`}
+    ${modo==="lote"?`<div class="formrow"><button class="btn primary" data-act="lote-listo">Listo</button><span class="muted small">Los cambios se aplican a este archivo de la lista.</span></div>`:`<div class="formrow"><button class="btn primary" data-act="guardar" ${b.errores.length||U.guardando?"disabled":""}>${U.guardando?"Guardando…":"Crear sugerido"}</button><button class="btn" data-act="cancelar">Cancelar</button></div>`}
     </section>`;
   }
   return map;
 }
 function vNuevoEvento(){
   const U=S.up;
-  return `<section class="panel" aria-label="Nuevo evento"><div class="panel-h"><h2>Nuevo evento</h2><button class="btn small-btn" data-act="evento-cerrar">Cerrar</button></div>
-    <p class="how">Un evento parte con el <b>sugerido</b> que le envías al cliente. Después, dentro del evento, cargas sus OCs y desde cada OC sus despachos.</p>
+  return `<section class="panel" aria-label="Nuevo sugerido"><div class="panel-h"><h2>Nuevo sugerido</h2><button class="btn small-btn" data-act="evento-cerrar">Cerrar</button></div>
+    <p class="how">Sube el Excel del sugerido que le envías al cliente. Después, dentro del sugerido, cargas sus OCs y desde cada OC sus despachos.</p>
     <div class="formrow">
       <div class="field"><span class="label">Cliente *</span><div class="seg" role="radiogroup" aria-label="Cliente">${CLIENTES.map(c=>`<label><input type="radio" name="uCli" value="${c}" ${U.cliente===c?"checked":""}>${c}</label>`).join("")}</div></div>
-      <div class="field" style="flex:1 1 240px"><span class="label">Nombre del evento</span><input id="uNombre" value="${esc(U.nombre)}" placeholder="Ej. Evento zapatillas octubre"></div>
+      <div class="field" style="flex:1 1 240px"><span class="label">Nombre del sugerido</span><input id="uNombre" value="${esc(U.nombre)}" placeholder="Ej. Zapatillas octubre"></div>
       <div class="field"><span class="label">Fecha de envío del sugerido</span><input id="uFecha" type="date" value="${esc(U.fecha)}"></div>
     </div>
     <label class="drop" id="drop" tabindex="0"><input type="file" id="uFile" accept=".xlsx,.xls,.csv" hidden>${U.file?`<b>${esc(U.file.name)}</b> · haz clic para cambiarlo`:`Arrastra aquí el Excel del sugerido, o haz clic para elegirlo`}</label>
@@ -975,7 +975,7 @@ function metaDe(id,b,U=S.up){
   const ocs=[...new Set(b.filas.map(f=>f[0]+"|"+f[1]))].filter(k=>!k.endsWith("|")), clientes=[...new Set(b.filas.map(f=>f[0]))];
   const ocLbl=[...new Set(b.filas.map(f=>f[1]).filter(Boolean))];
   const sugeridoId=U.tipo==="oc"?(U.sugId??sugeridoPorFecha(U.cliente,U.fecha))||null:null;
-  if(U.tipo==="sugerido") return {id,sugeridoId:null,tipo:"sugerido",cliente:U.cliente,clientes:[U.cliente],ocs:[],ocLbl:(U.nombre||"").trim()||(U.file?.name||"Evento").replace(/\.[^.]+$/,"").replace(/[_]+/g," "),fecha:U.fecha,vence:"",archivo:U.file?.name||"",creado:new Date().toISOString(),filas:b.filas.length,unidades:b.filas.reduce((s,f)=>s+f[4],0),monto:b.filas.reduce((s,f)=>s+f[4]*f[5],0)};
+  if(U.tipo==="sugerido") return {id,sugeridoId:null,tipo:"sugerido",cliente:U.cliente,clientes:[U.cliente],ocs:[],ocLbl:(U.nombre||"").trim()||(U.file?.name||"Sugerido").replace(/\.[^.]+$/,"").replace(/[_]+/g," "),fecha:U.fecha,vence:"",archivo:U.file?.name||"",creado:new Date().toISOString(),filas:b.filas.length,unidades:b.filas.reduce((s,f)=>s+f[4],0),monto:b.filas.reduce((s,f)=>s+f[4]*f[5],0)};
   return {id,sugeridoId,tipo:U.tipo,cliente:clientes.length===1?clientes[0]:"",clientes:clientes.slice(0,20),ocs:ocs.slice(0,300),ocLbl:ocLbl.length>3?ocLbl.length+" OCs":ocLbl.join(", "),fecha:U.fecha,vence:U.tipo==="oc"?U.vence:"",archivo:U.file?.name||"",creado:new Date().toISOString(),filas:b.filas.length,unidades:b.filas.reduce((s,f)=>s+f[4],0),monto:b.filas.reduce((s,f)=>s+f[4]*f[5],0)};
 }
 function resetUp(){const t=S.up?.tipo||"oc"; S.up={tipo:t,cliente:"",oc:"",fecha:hoy(),vence:"",file:null,wb:null,sheet:"",aoa:null,hdr:0,map:{},wide:false,sizeCols:[],reemplazar:true,msg:null,guardando:false,sugId:null,nombre:""}; S.up.tipo="sugerido";}
@@ -1021,8 +1021,8 @@ function vLote(){
   }).join("");
   const listos=L.items.filter(it=>it.estado!=="guardado"&&it._b&&!it._b.errores.length).length;
   return `<section class="panel" aria-label="Carga de varios archivos">
-    <div class="panel-h"><h2>${esOc?"Cargar OCs del evento":L.oc?"Cargar despachos de esta OC":"Cargar despachos del evento"}</h2><button class="btn small-btn" data-act="lote-cerrar">Cerrar</button></div>
-    <p class="how">${!esOc&&!L.oc?`Cada archivo debe traer la columna de <b>N° de OC</b>: las unidades se cruzan con esa OC. Pon la fecha de cada despacho.`:esOc?`Las OCs quedan asociadas a este evento y al cliente <b>${esc(L.cliente)}</b>. Si el archivo no trae el N° de OC, escríbelo (se toma del nombre del archivo cuando trae un número).`:`Todos los archivos quedan como despachos de la OC <b>${esc(L.oc)}</b> de <b>${esc(L.cliente)}</b>. Pon la fecha de cada despacho.`}</p>
+    <div class="panel-h"><h2>${esOc?"Cargar OCs del sugerido":L.oc?"Cargar despachos de esta OC":"Cargar despachos del sugerido"}</h2><button class="btn small-btn" data-act="lote-cerrar">Cerrar</button></div>
+    <p class="how">${!esOc&&!L.oc?`Cada archivo debe traer la columna de <b>N° de OC</b>: las unidades se cruzan con esa OC. Pon la fecha de cada despacho.`:esOc?`Las OCs quedan asociadas a este sugerido y al cliente <b>${esc(L.cliente)}</b>. Si el archivo no trae el N° de OC, escríbelo (se toma del nombre del archivo cuando trae un número).`:`Todos los archivos quedan como despachos de la OC <b>${esc(L.oc)}</b> de <b>${esc(L.cliente)}</b>. Pon la fecha de cada despacho.`}</p>
     <label class="drop" id="loteDrop" tabindex="0"><input type="file" id="loteFile" accept=".xlsx,.xls,.csv" multiple hidden>Arrastra aquí uno o varios archivos, o haz clic para elegirlos</label>
     ${L.items.length?`<div class="tablewrap"><table><thead><tr><th>Archivo</th>${esOc?"<th>N° OC</th>":""}<th>${esOc?"Emisión":"Fecha despacho"}</th>${esOc?"<th>Fecha límite</th>":""}<th class="r">SKUs</th><th class="r">Uds</th><th class="r">Monto</th><th>Estado</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`:""}
     ${L.msg?`<div class="msg ${L.msg[0]}">${esc(L.msg[1])}</div>`:""}
