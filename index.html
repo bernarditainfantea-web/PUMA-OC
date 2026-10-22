@@ -141,6 +141,14 @@ svg .thr{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 4;opacity:.7}
 .sev.neutral{background:var(--sunken);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
 .fchips{display:flex;flex-wrap:wrap;gap:6px}
 .fun{display:grid;gap:8px}
+.fun-nc{padding-top:4px;border-top:1px dashed var(--line);color:var(--ink)}
+.hist-t{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.hist-t li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;padding:8px 0 8px 14px;border-left:3px solid var(--line);margin-left:4px}
+.hist-t .ht-t{font-weight:600}
+.hist-t .ht-f{font-size:12.5px;color:var(--muted);padding-top:2px}
+.hist-t li.ht-sug{border-left-color:var(--muted)} .hist-t li.ht-oc{border-left-color:var(--accent)} .hist-t li.ht-desp{border-left-color:var(--ok)}
+.hist-t li.ht-nc{border-left-color:var(--warn)} .hist-t li.ht-alerta{border-left-color:var(--crit)} .hist-t li.ht-neutral{border-left-color:var(--line)}
+@media (max-width:560px){.hist-t li{grid-template-columns:1fr;gap:2px}}
 .fun-row{display:grid;grid-template-columns:110px minmax(80px,1fr) minmax(0,230px);gap:4px 12px;align-items:center}
 .fun-l{font-weight:600;font-size:14px}
 .fun-bar{height:14px;background:var(--sunken);border-radius:4px;overflow:hidden}
@@ -469,7 +477,10 @@ function sugeridos(){
     const ocDentro=dentro.reduce((s,l)=>s+Math.min(l.oc,l.sug),0);
     const skus=new Map(); for(const l of L){const o=skus.get(l.sku)||{sku:l.sku,desc:desc[l.sku]||"",sug:0,oc:0,ent:0,tallas:[]}; o.sug+=l.sug;o.oc+=l.oc;o.ent+=l.ent;o.tallas.push(l); skus.set(l.sku,o);}
     const sk=[...skus.values()];
-    out.push({c,clientes,L,sk,ocs,T,conv:T.sug?ocDentro/T.sug:null,fr:T.oc?T.ent/T.oc:null,avance:T.sug?Math.min(T.ent,T.sug)/T.sug:null,
+    const keysOc=new Set(ocs.map(o=>o.key));
+    const ncs=R.ncs.filter(n=>n.sugerido_id===c.id||(n.oc&&keysOc.has(n.cliente+"|"+n.oc)));
+    T.nc=ncs.filter(n=>n.estado!=="Rechazada").reduce((a,n)=>a+(+n.monto||0),0);
+    out.push({c,clientes,L,sk,ocs,ncs,T,conv:T.sug?ocDentro/T.sug:null,fr:T.oc?T.ent/T.oc:null,avance:T.sug?Math.min(T.ent,T.sug)/T.sug:null,
       noComprados:sk.filter(o=>o.sug>0&&o.oc===0).length,nSkus:sk.filter(o=>o.sug>0).length,
       abiertas:ocs.filter(o=>!["Completa","Cerrada"].includes(o.estado)).length});
   }
@@ -678,6 +689,17 @@ function selSugerido(cliente,actual,attrs,disabled){
   const sc=R.cargas.filter(c=>c.tipo==="sugerido"&&(c.cliente===cliente||(c.clientes||[]).includes(cliente))).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
   return `<select ${attrs} ${disabled?"disabled":""}><option value="">Sin sugerido</option>${sc.map(c=>`<option value="${esc(c.id)}" ${c.id===actual.id?"selected":""}>${esc(nombreEvento(c))} · ${fdate(c.fecha)}${c.id===actual.id&&actual.auto?" (asignado por fecha)":""}</option>`).join("")}</select>`;
 }
+/* Historia del sugerido: todo lo que pasó, en orden de fecha */
+function historiaSugerido(s){
+  const ev=[{f:s.c.fecha,t:"Sugerido enviado",d:`${fmtN(s.T.sug)} uds${s.T.mSug?" · "+fmt$(s.T.mSug):""}`,c:"sug"}];
+  for(const o of s.ocs) ev.push({f:o.fecha,t:`OC ${o.oc} emitida`,d:`${fmtN(o.ocQ)} uds${o.montoOc?" · "+fmt$(o.montoOc):""}${o.vence?` · fecha límite ${fdate(o.vence)}`:""}`,c:"oc",k:o.key});
+  for(const o of s.ocs) for(const e of o.envios.values()) ev.push({f:e.fecha,t:`Despacho OC ${o.oc}`,d:`${fmtN(e.q)} uds${e.monto?" · "+fmt$(e.monto):""} · ${e.archivo}`,c:"desp",k:o.key});
+  for(const o of s.ocs) if(o.vence&&o.estado==="Atrasada") ev.push({f:o.vence,t:`OC ${o.oc} vence sin completar`,d:`fill rate ${pct(o.fr,0)}`,c:"alerta",k:o.key});
+  for(const n of s.ncs) ev.push({f:n.fecha,t:`Nota de crédito ${n.numero||"(sin número)"} · ${n.estado}`,d:`${fmt$(n.monto)} · ${n.motivo}${n.oc?` · OC ${n.oc}`:" · todo el sugerido"}`,c:n.estado==="Rechazada"?"neutral":"nc"});
+  ev.sort((a,b)=>String(a.f).localeCompare(String(b.f)));
+  return `<section class="panel"><div class="panel-h"><h2>Historia</h2><span class="muted small">${ev.length} hitos</span></div>
+  <ol class="hist-t">${ev.map(e=>`<li class="ht-${e.c}"><span class="ht-f mono">${fdate(e.f)}</span><div><div class="ht-t">${e.k?`<a href="#" data-oc-link="${esc(e.k)}">${esc(e.t)}</a>`:esc(e.t)}</div><div class="small muted">${esc(e.d)}</div></div></li>`).join("")}</ol></section>`;
+}
 function archivosEvento(s){
   const keys=new Set(s.ocs.map(o=>o.key)), ids=new Set(s.ocs.flatMap(o=>o.cargaIds));
   const arch=[s.c,...R.cargas.filter(c=>ids.has(c.id)),...R.cargas.filter(c=>c.tipo==="despacho"&&(c.ocs||[]).some(k=>keys.has(k)))];
@@ -724,6 +746,7 @@ function vSugDetalle(s){
       <div class="kpi"><span class="label">Pendiente de despacho</span><span class="v ${s.T.oc-s.T.ent>0?"warn":"ok"}">${fmtN(s.T.oc-s.T.ent)}</span><span class="d">uds${s.T.mOc?` · ${fmt$(s.T.mOc-s.T.mEnt)}`:""}</span></div>
     </div>
     ${embudo(s)}
+    ${s.T.nc||s.T.mEnt?`<div class="fun-nc small"><b>Notas de crédito:</b> ${fmt$(s.T.nc)}${s.T.mEnt?` · ${pct(s.T.nc/s.T.mEnt,1)} de lo despachado · <b>Despachado neto: ${fmt$(s.T.mEnt-s.T.nc)}</b>`:""}</div>`:""}
   </section>
   ${loteVisible({sugId:s.c.id})?vLote():""}
   <section class="panel"><div class="panel-h"><h2>OCs del sugerido</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">Para mover una OC a otro sugerido, ábrela.</span><button class="btn primary upload-only" data-act="lote-oc" data-k="${esc(s.c.id)}" ${esDemo()?'disabled title="Crea tu primer sugerido para usar esta opción"':""}>Cargar OCs</button><button class="btn upload-only" data-act="lote-desp-evento" data-k="${esc(s.c.id)}" ${esDemo()||!s.ocs.length?"disabled":""}>Cargar despachos</button></div></div>
@@ -731,6 +754,11 @@ function vSugDetalle(s){
     ${s.ocs.map(o=>`<tr class="row" data-oc-link="${esc(o.key)}"><td class="mono"><b>${esc(o.oc)}</b>${sugeridoDeOc(o).auto?' <span class="muted small" title="Asociada por fecha">(por fecha)</span>':""}</td><td class="mono">${fdate(o.fecha)}</td><td class="mono">${fdate(o.vence)}</td><td class="num r">${fmtN(o.ocQ)}</td><td class="num r">${o.montoOc?fmt$(o.montoOc):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.desp?frBar(o.fr,u):'<span class="muted">—</span>'}</td><td class="mono">${fdate(o.ultimoDesp)}</td><td>${estOc(o.estado)}</td></tr>`).join("")}
     </tbody></table></div>`:`<div class="muted small">Todavía no hay OCs en este sugerido. Usa <b>Cargar OCs</b> para subir una o varias.</div>`}
   </section>
+  <section class="panel"><div class="panel-h"><h2>Notas de crédito del sugerido</h2><button class="btn primary upload-only" data-act="nc-desde-sug" data-k="${esc(s.c.id)}" ${esDemo()?'disabled title="Crea tu primer sugerido para usar esta opción"':""}>Crear nota de crédito</button></div>
+    ${S.ncForm&&S.ncForm.sugId===s.c.id?ncFormView():""}
+    ${s.ncs.length?ncTable(s.ncs.slice().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))):`<div class="muted small">Ninguna todavía. Puedes asociarla a una OC del sugerido o al sugerido completo (por ejemplo, un descuento comercial).</div>`}
+  </section>
+  ${historiaSugerido(s)}
   ${archivosEvento(s)}
   <section class="panel"><h2>Por SKU</h2>
     <div class="legend"><span>Cada talla muestra <b>sugerido → OC → despachado</b></span></div>
@@ -756,7 +784,7 @@ function vNc(){
   const sum=e=>base.filter(n=>e.includes(n.estado)).reduce((s,n)=>s+(n.monto||0),0);
   const cnt={}; for(const n of base) cnt[n.estado]=(cnt[n.estado]||0)+1;
   return `<div style="display:grid;gap:16px">
-  ${S.ncForm?ncFormView():`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="nc-nueva" ${esDemo()?"disabled":""}>Nueva nota de crédito</button>${esDemo()?'<span class="muted small">Sube tus OCs para empezar a registrar notas de crédito. Las de abajo son de ejemplo.</span>':""}</div>`}
+  ${S.ncForm&&!(S.ncForm.sugId&&S.tab==="sugeridos")?ncFormView():`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="nc-nueva" ${esDemo()?"disabled":""}>Nueva nota de crédito</button>${esDemo()?'<span class="muted small">Sube tus OCs para empezar a registrar notas de crédito. Las de abajo son de ejemplo.</span>':""}</div>`}
   <div class="kpis">
     <div class="kpi"><span class="label">Por resolver</span><span class="v warn">${fmt$(sum(["Solicitada","En revisión"]))}</span><span class="d">${(cnt["Solicitada"]||0)+(cnt["En revisión"]||0)} solicitadas o en revisión</span></div>
     <div class="kpi"><span class="label">Aprobadas sin emitir</span><span class="v">${fmt$(sum(["Aprobada"]))}</span><span class="d">${cnt["Aprobada"]||0} notas</span></div>
@@ -770,12 +798,13 @@ function vNc(){
 }
 function ncFormView(){
   const f=S.ncForm, clientes=clientesConocidos();
-  const ocsCli=R.ocList.filter(o=>o.cliente===f.cliente);
+  const sugCtx=f.sugId?sugeridos().find(x=>x.c.id===f.sugId):null;
+  const ocsCli=sugCtx?sugCtx.ocs:R.ocList.filter(o=>o.cliente===f.cliente);
   const montoL=f.lineas.reduce((s,l)=>s+(num(l.q)*num(l.precio)),0);
-  return `<section class="panel" aria-label="Nota de crédito"><h2>${f.id?"Editar nota de crédito":"Nueva nota de crédito"}</h2>
+  return `<section class="panel" aria-label="Nota de crédito"><h2>${f.id?"Editar nota de crédito":"Nueva nota de crédito"}${sugCtx?` <span class="muted" style="font-size:15px">· ${esc(nombreEvento(sugCtx.c))}</span>`:""}</h2>
   <div class="ncgrid">
     <div class="field"><span class="label">Cliente *</span><select data-nc="cliente"><option value="">— elegir —</option>${clientes.map(c=>`<option ${c===f.cliente?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
-    <div class="field"><span class="label">OC asociada</span><select data-nc="oc"><option value="">Sin OC</option>${ocsCli.map(o=>`<option value="${esc(o.oc)}" ${o.oc===f.oc?"selected":""}>${esc(o.oc)} · ${fdate(o.fecha)}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">OC asociada</span><select data-nc="oc"><option value="">${sugCtx?"Todo el sugerido (sin OC)":"Sin OC"}</option>${ocsCli.map(o=>`<option value="${esc(o.oc)}" ${o.oc===f.oc?"selected":""}>${esc(o.oc)} · ${fdate(o.fecha)}</option>`).join("")}</select></div>
     <div class="field"><span class="label">Motivo *</span><select data-nc="motivo">${NC_MOT.map(m=>`<option ${m===f.motivo?"selected":""}>${m}</option>`).join("")}</select></div>
     <div class="field"><span class="label">Estado</span><select data-nc="estado">${NC_EST.map(e=>`<option ${e===f.estado?"selected":""}>${e}</option>`).join("")}</select></div>
     <div class="field"><span class="label">Fecha</span><input type="date" data-nc="fecha" value="${esc(f.fecha)}"></div>
@@ -805,9 +834,10 @@ async function ncGuardar(){
   if(f.err){render(); return;}
   const prev=S.ncs.find(n=>n.id===f.id);
   const historial=(prev?.historial||[]).slice(); if(!prev||prev.estado!==f.estado) historial.push({estado:f.estado,fecha:hoy()});
-  const doc={numero:clean(f.numero),cliente:f.cliente,oc:f.oc,fecha:f.fecha,motivo:f.motivo,estado:f.estado,monto,lineas,notas:clean(f.notas),historial,actualizado:new Date().toISOString(),creado:prev?.creado||new Date().toISOString()};
+  const sugId=f.sugId||f.sugerido_id||null;
+  const doc={...(sugId?{sugerido_id:sugId}:{}),numero:clean(f.numero),cliente:f.cliente,oc:f.oc,fecha:f.fecha,motivo:f.motivo,estado:f.estado,monto,lineas,notas:clean(f.notas),historial,actualizado:new Date().toISOString(),creado:prev?.creado||new Date().toISOString()};
     try{ await API.guardarNc(f.id,doc); S.ncForm=null; await recargar(); }
-  catch(e){ f.err="No se pudo guardar: "+errTxt(e); }
+  catch(e){ f.err=/sugerido_id/.test(errTxt(e))?"Falta actualizar la base: corre en Supabase la línea nueva de schema.sql (notas_credito.sugerido_id).":"No se pudo guardar: "+errTxt(e); }
   render();
 }
 async function ncCambiarEstado(id,estado){
@@ -1096,8 +1126,9 @@ document.addEventListener("click",async e=>{
   if(a==="lote-guardar") loteGuardar();
   if(a==="volver-sug"){if(S.lote&&S.lote.editando!=null) S.up=S.upGuardado||S.up; S.det.sugeridos=null; S.lote=null; render();}
   if(a==="nc-nueva"){ncNueva({cliente:S.filtros.cliente}); render();}
+  if(a==="nc-desde-sug"){const c=R.cargas.find(x=>x.id===t.dataset.k); ncNueva({cliente:c.cliente||(c.clientes||[])[0]||"",sugId:c.id}); render();}
   if(a==="nc-desde-oc"){const o=R.ocs.get(t.dataset.k); ncNueva({cliente:o.cliente,oc:o.oc}); irTab("nc");}
-  if(a==="nc-editar"){const n=S.ncs.find(x=>x.id===t.dataset.id); if(n){S.ncForm={...n,monto:String(n.monto||""),lineas:(n.lineas||[]).map(l=>({...l})),err:null}; render(); window.scrollTo({top:0});}}
+  if(a==="nc-editar"){const n=S.ncs.find(x=>x.id===t.dataset.id); if(n){S.ncForm={...n,sugId:S.tab==="sugeridos"?(n.sugerido_id||S.det.sugeridos):n.sugerido_id||null,monto:String(n.monto||""),lineas:(n.lineas||[]).map(l=>({...l})),err:null}; render(); window.scrollTo({top:0});}}
   if(a==="nc-cancelar"){S.ncForm=null; render();}
   if(a==="nc-guardar") ncGuardar();
   if(a==="nc-addline"&&f){f.lineas.push({sku:"",talla:"",q:"",precio:""}); render();}

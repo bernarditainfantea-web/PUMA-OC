@@ -74,6 +74,9 @@ create table if not exists notas_credito (
   creado_por  text default (auth.jwt() ->> 'email')
 );
 
+-- v3: una nota de crédito puede ir a una OC o al sugerido completo
+alter table notas_credito add column if not exists sugerido_id uuid references cargas(id) on delete set null;
+
 create table if not exists config (
   clave text primary key,
   valor jsonb not null
