@@ -460,9 +460,29 @@ function sugeridoPorFecha(cliente,fecha){
   return sc[0]?.id||"";
 }
 function sugeridoDeOc(o){ return o.sugId&&R.cargas.some(c=>c.id===o.sugId)?{id:o.sugId,auto:false}:{id:sugeridoPorFecha(o.cliente,o.fecha),auto:true}; }
+function atribucionSlow(){
+  const {filas,cargas,ocList}=R;
+  const info=cargas.filter(c=>c.tipo==="sugerido").map(c=>({id:c.id,fecha:String(c.fecha||""),clientes:new Set(),skus:new Set()}));
+  const byId=new Map(info.map(x=>[x.id,x]));
+  for(const r of filas.sug){const x=byId.get(r.carga); if(x){x.clientes.add(r.cliente); x.skus.add(r.sku);}}
+  for(const o of ocList){const x=byId.get(sugeridoDeOc(o).id); if(x) for(const l of o.L) x.skus.add(l.sku);}
+  const out=new Map(); // sugId -> [{n, sku, monto}]
+  for(const n of R.ncs){
+    if(!esSlow(n)||n.oc||n.estado==="Rechazada") continue;
+    for(const l of n.lineas||[]){
+      if(n.sugerido_id&&byId.has(n.sugerido_id)){(out.get(n.sugerido_id)||out.set(n.sugerido_id,[]).get(n.sugerido_id)).push({n,sku:normSku(l.sku),monto:(+l.q||0)*(+l.precio||0)}); continue;}
+      const sku=normSku(l.sku), cand=info.filter(x=>x.clientes.has(n.cliente)&&x.skus.has(sku));
+      if(!cand.length) continue;
+      const antes=cand.filter(x=>x.fecha<=String(n.fecha||"9999")).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+      const dst=(antes[0]||cand.sort((a,b)=>a.fecha.localeCompare(b.fecha))[0]).id;
+      (out.get(dst)||out.set(dst,[]).get(dst)).push({n,sku,monto:(+l.q||0)*(+l.precio||0)});
+    }
+  }
+  return out;
+}
 function sugeridos(){
   const {filas,cargas,desc,pr,ocList}=R, F=S.filtros;
-  const out=[];
+  const out=[], slowMap=atribucionSlow();
   for(const c of cargas.filter(c=>c.tipo==="sugerido")){
     const rows=filas.sug.filter(r=>r.carga===c.id&&(!F.cliente||r.cliente===F.cliente)); if(!rows.length) continue;
     const clientes=[...new Set(rows.map(r=>r.cliente))];
@@ -478,9 +498,13 @@ function sugeridos(){
     const skus=new Map(); for(const l of L){const o=skus.get(l.sku)||{sku:l.sku,desc:desc[l.sku]||"",sug:0,oc:0,ent:0,tallas:[]}; o.sug+=l.sug;o.oc+=l.oc;o.ent+=l.ent;o.tallas.push(l); skus.set(l.sku,o);}
     const sk=[...skus.values()];
     const keysOc=new Set(ocs.map(o=>o.key));
-    const ncs=R.ncs.filter(n=>n.sugerido_id===c.id||(n.oc&&keysOc.has(n.cliente+"|"+n.oc)));
+    const ncs=R.ncs.filter(n=>!(esSlow(n)&&!n.oc)&&(n.sugerido_id===c.id||(n.oc&&keysOc.has(n.cliente+"|"+n.oc))));
     T.nc=ncs.filter(n=>n.estado!=="Rechazada").reduce((a,n)=>a+(+n.monto||0),0);
-    out.push({c,clientes,L,sk,ocs,ncs,T,conv:T.sug?ocDentro/T.sug:null,fr:T.oc?T.ent/T.oc:null,avance:T.sug?Math.min(T.ent,T.sug)/T.sug:null,
+    const slow=slowMap.get(c.id)||[];
+    T.slow=slow.reduce((a,x)=>a+x.monto,0);
+    for(const x of slow){const o=sk.find(o=>o.sku===x.sku); if(o) o.slow=(o.slow||0)+x.monto;}
+    const slowNcs=[...new Set(slow.map(x=>x.n))];
+    out.push({c,clientes,L,sk,ocs,ncs,slow,slowNcs,T,conv:T.sug?ocDentro/T.sug:null,fr:T.oc?T.ent/T.oc:null,avance:T.sug?Math.min(T.ent,T.sug)/T.sug:null,
       noComprados:sk.filter(o=>o.sug>0&&o.oc===0).length,nSkus:sk.filter(o=>o.sug>0).length,
       abiertas:ocs.filter(o=>!["Completa","Cerrada"].includes(o.estado)).length});
   }
@@ -530,7 +554,8 @@ const EST_OC={"Completa":"ok","Parcial":"warn","Atrasada":"crit","Sin despacho":
 const estOc=e=>`<span class="sev ${EST_OC[e]}">${esc(e)}</span>`;
 const NC_EST=["Solicitada","En revisión","Aprobada","Emitida","Aplicada","Rechazada"];
 const NC_CLS={"Solicitada":"info","En revisión":"warn","Aprobada":"info","Emitida":"ok","Aplicada":"ok","Rechazada":"neutral"};
-const NC_MOT=["Devolución","Diferencia de precio","Faltante facturado","Producto dañado o con falla","Descuento comercial","Error de facturación","Otro"];
+const NC_MOT=["Devolución","Diferencia de precio","Faltante facturado","Producto dañado o con falla","Aporte a evento (Cyber u otro)","Slow mover (apoyo de rotación)","Descuento comercial","Error de facturación","Otro"];
+const esSlow=n=>/^slow mover/i.test(n.motivo||"");
 const qmatch=(...xs)=>{const q=S.filtros.q.trim().toUpperCase(); return !q||xs.some(x=>String(x||"").toUpperCase().includes(q));};
 
 function vResumen(){
@@ -695,6 +720,7 @@ function historiaSugerido(s){
   for(const o of s.ocs) ev.push({f:o.fecha,t:`OC ${o.oc} emitida`,d:`${fmtN(o.ocQ)} uds${o.montoOc?" · "+fmt$(o.montoOc):""}${o.vence?` · fecha límite ${fdate(o.vence)}`:""}`,c:"oc",k:o.key});
   for(const o of s.ocs) for(const e of o.envios.values()) ev.push({f:e.fecha,t:`Despacho OC ${o.oc}`,d:`${fmtN(e.q)} uds${e.monto?" · "+fmt$(e.monto):""} · ${e.archivo}`,c:"desp",k:o.key});
   for(const o of s.ocs) if(o.vence&&o.estado==="Atrasada") ev.push({f:o.vence,t:`OC ${o.oc} vence sin completar`,d:`fill rate ${pct(o.fr,0)}`,c:"alerta",k:o.key});
+  for(const n of s.slowNcs){const xs=s.slow.filter(x=>x.n===n); ev.push({f:n.fecha,t:`NC slow mover ${n.numero||"(sin número)"} · ${n.estado}`,d:`${fmt$(xs.reduce((a,x)=>a+x.monto,0))} en ${new Set(xs.map(x=>x.sku)).size} SKU de este sugerido (total de la NC ${fmt$(n.monto)})`,c:"nc"});}
   for(const n of s.ncs) ev.push({f:n.fecha,t:`Nota de crédito ${n.numero||"(sin número)"} · ${n.estado}`,d:`${fmt$(n.monto)} · ${n.motivo}${n.oc?` · OC ${n.oc}`:" · todo el sugerido"}`,c:n.estado==="Rechazada"?"neutral":"nc"});
   ev.sort((a,b)=>String(a.f).localeCompare(String(b.f)));
   return `<section class="panel"><div class="panel-h"><h2>Historia</h2><span class="muted small">${ev.length} hitos</span></div>
@@ -746,6 +772,7 @@ function vSugDetalle(s){
       <div class="kpi"><span class="label">Pendiente de despacho</span><span class="v ${s.T.oc-s.T.ent>0?"warn":"ok"}">${fmtN(s.T.oc-s.T.ent)}</span><span class="d">uds${s.T.mOc?` · ${fmt$(s.T.mOc-s.T.mEnt)}`:""}</span></div>
     </div>
     ${embudo(s)}
+    ${s.T.slow?`<div class="fun-nc small" style="border-top:0;padding-top:0"><b>Slow movers:</b> ${fmt$(s.T.slow)} en NC de apoyo de rotación sobre ${new Set(s.slow.map(x=>x.sku)).size} SKU de este sugerido${s.T.mEnt?` · ${pct(s.T.slow/s.T.mEnt,1)} de lo despachado`:""}. No se descuenta del neto: es el costo de los SKUs que no rotaron.</div>`:""}
     ${s.T.nc||s.T.mEnt?`<div class="fun-nc small"><b>Notas de crédito:</b> ${fmt$(s.T.nc)}${s.T.mEnt?` · ${pct(s.T.nc/s.T.mEnt,1)} de lo despachado · <b>Despachado neto: ${fmt$(s.T.mEnt-s.T.nc)}</b>`:""}</div>`:""}
   </section>
   ${loteVisible({sugId:s.c.id})?vLote():""}
@@ -763,7 +790,7 @@ function vSugDetalle(s){
   <section class="panel"><h2>Por SKU</h2>
     <div class="legend"><span>Cada talla muestra <b>sugerido → OC → despachado</b></span></div>
     <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th class="r">Sugerido</th><th class="r">En OC</th><th class="r">Comprado</th><th class="r">Despachado</th><th class="r">Fill rate</th><th>Tallas</th></tr></thead><tbody>
-    ${sk.map(o=>`<tr><td class="mono">${esc(o.sku)}</td><td>${esc(o.desc)}${o.sug===0?' <span class="sev info">fuera del sugerido</span>':""}</td><td class="num r">${o.sug?fmtN(o.sug):"—"}</td><td class="num r">${fmtN(o.oc)}</td><td class="num r">${o.sug?pct(o.oc/o.sug,0):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.oc?frBar(o.ent/o.oc,u):'<span class="muted small">sin OC</span>'}</td>
+    ${sk.map(o=>`<tr><td class="mono">${esc(o.sku)}</td><td>${esc(o.desc)}${o.sug===0?' <span class="sev info">fuera del sugerido</span>':""}${o.slow?` <span class="sev warn" title="NC de slow mover atribuida a este sugerido">slow mover ${fmt$(o.slow)}</span>`:""}</td><td class="num r">${o.sug?fmtN(o.sug):"—"}</td><td class="num r">${fmtN(o.oc)}</td><td class="num r">${o.sug?pct(o.oc/o.sug,0):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.oc?frBar(o.ent/o.oc,u):'<span class="muted small">sin OC</span>'}</td>
       <td><div class="chips">${sortTallas(o.tallas.map(t=>t.talla)).map(tk=>{const t=o.tallas.find(x=>x.talla===tk); const cls=!t.oc?(t.sug?"crit":""):st(t.ent/t.oc,u); return `<span class="chip ${cls}" data-tip="${esc(`Talla ${tk}\nSugerido ${fmtN(t.sug)} · OC ${fmtN(t.oc)} · despachado ${fmtN(t.ent)}`)}">${esc(tk)} ${fmtN(t.sug)}→${fmtN(t.oc)}→${fmtN(t.ent)}</span>`;}).join("")}</div></td></tr>`).join("")}
     </tbody></table></div>
   </section></div>`;
@@ -810,7 +837,7 @@ function ncFormView(){
     <div class="field"><span class="label">Fecha</span><input type="date" data-nc="fecha" value="${esc(f.fecha)}"></div>
     <div class="field"><span class="label">N° NC</span><input data-nc="numero" value="${esc(f.numero)}" placeholder="Cuando se emita"></div>
   </div>
-  <div class="field"><span class="label">Detalle (opcional)</span>
+  <div class="field"><span class="label">Detalle ${/^slow mover/i.test(f.motivo)?"* (SKUs del apoyo; la talla es opcional)":"(opcional)"}</span>
     <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Talla</th><th class="r">Uds</th><th class="r">Precio unit.</th><th class="r">Subtotal</th><th></th></tr></thead><tbody>
     ${f.lineas.map((l,i)=>`<tr><td><input class="tin wide" data-ncl="${i}:sku" value="${esc(l.sku)}"></td><td><input class="tin" data-ncl="${i}:talla" value="${esc(l.talla)}"></td><td class="r"><input class="tin r" data-ncl="${i}:q" value="${esc(l.q)}" inputmode="numeric"></td><td class="r"><input class="tin r" data-ncl="${i}:precio" value="${esc(l.precio)}" inputmode="numeric"></td><td class="num r">${fmt$(num(l.q)*num(l.precio))}</td><td><button class="btn small-btn" data-act="nc-delline" data-i="${i}" aria-label="Quitar línea">Quitar</button></td></tr>`).join("")||`<tr><td colspan="6" class="muted small">Sin líneas. Puedes ingresar solo el monto total abajo.</td></tr>`}
     </tbody></table></div>
@@ -831,6 +858,7 @@ async function ncGuardar(){
   const monto=lineas.length?lineas.reduce((s,l)=>s+l.q*l.precio,0):num(f.monto);
   if(!f.cliente) f.err="Elige el cliente.";
   else if(!(monto>0)) f.err="El monto debe ser mayor a cero.";
+  else if(/^slow mover/i.test(f.motivo)&&!lineas.length) f.err="Para una NC de slow movers agrega los SKUs en el detalle (con unidades y precio). Así se sabe de qué sugerido venía cada uno.";
   if(f.err){render(); return;}
   const prev=S.ncs.find(n=>n.id===f.id);
   const historial=(prev?.historial||[]).slice(); if(!prev||prev.estado!==f.estado) historial.push({estado:f.estado,fecha:hoy()});
@@ -1159,7 +1187,7 @@ document.addEventListener("change",async e=>{
   if(t.dataset.size!=null){const i=+t.dataset.size; U.sizeCols=t.checked?[...U.sizeCols,i]:U.sizeCols.filter(x=>x!==i); render(); return;}
   if(t.id==="uReemp"){U.reemplazar=t.checked; return;}
   if(t.dataset.ncest){ncCambiarEstado(t.dataset.ncest,t.value); return;}
-  if(t.dataset.nc&&S.ncForm){const k=t.dataset.nc; S.ncForm[k]=t.value; if(k==="cliente"){S.ncForm.oc="";} if(k==="cliente"||k==="oc") render(); return;}
+  if(t.dataset.nc&&S.ncForm){const k=t.dataset.nc; S.ncForm[k]=t.value; if(k==="cliente"){S.ncForm.oc="";} if(k==="cliente"||k==="oc"||k==="motivo") render(); return;}
   if(t.dataset.cerrar!=null){const [c,o]=t.dataset.cerrar.split("|"); const k=ocKey(c,o); S.estadoOc[k]=t.checked; render();
     if(!esDemo()){try{await API.setEstadoOc(c,o,t.checked);}catch(e){alertaGlobal(errTxt(e));}} return;}
 });
