@@ -477,7 +477,10 @@ function renderBanner(){
   if(S.rol==="lector") h+=`<div class="banner" style="margin-top:8px"><b>Acceso de solo lectura.</b> Puedes revisar todo, pero no subir archivos ni cambiar estados.</div>`;
   $("#banner").innerHTML=h;
 }
-function clientesConocidos(){const {filas}=fuente(); return [...new Set([...filas.oc,...filas.sug,...filas.desp].map(r=>r.cliente))].filter(Boolean).sort();}
+const CLIENTES=["MELI 1P","MELI 3P"];
+// Lleva cualquier forma de escribir el cliente a uno de los dos oficiales
+const normCliente=v=>{const x=String(v??"").toUpperCase().replace(/\s+/g,""); return /3P/.test(x)?"MELI 3P":/1P/.test(x)?"MELI 1P":"";};
+function clientesConocidos(){const {filas}=fuente(); return [...new Set([...CLIENTES,...filas.oc,...filas.sug,...filas.desp].map(r=>r.cliente))].filter(Boolean).sort();}
 function renderFiltros(){
   const {filas}=fuente(); const clientes=clientesConocidos();
   if(S.filtros.cliente&&!clientes.includes(S.filtros.cliente)) S.filtros.cliente="";
@@ -814,12 +817,12 @@ function construir(){
   if(!U.wide&&m.talla<0) errores.push("Falta la columna de talla (o marca las tallas en columnas).");
   if(U.wide&&!U.sizeCols.length) errores.push("Marca qué columnas son tallas.");
   if(!U.wide&&m.cant<0) errores.push("Falta la columna de cantidad.");
-  if(m.cliente<0&&!U.cliente.trim()) errores.push("Escribe el cliente (el archivo no trae columna de cliente).");
+  if(!U.cliente) errores.push("Elige el cliente: MELI 1P o MELI 3P.");
   if(U.tipo==="oc"&&m.oc<0&&!U.oc.trim()) errores.push("Escribe el N° de OC (el archivo no trae columna de OC).");
   if(errores.length) return {filas,desc,errores};
   for(let i=U.hdr+1;i<U.aoa.length;i++){
     const r=U.aoa[i]; const sku=normSku(r[m.sku]); if(!sku||/TOTAL/.test(sku)) continue;
-    const cliente=m.cliente>=0?clean(r[m.cliente])||U.cliente.trim():U.cliente.trim();
+    const cliente=(m.cliente>=0&&normCliente(r[m.cliente]))||U.cliente;
     const oc=U.tipo==="sugerido"?"":(m.oc>=0?clean(r[m.oc])||U.oc.trim():U.oc.trim());
     const precio=m.precio>=0?Math.round(num(r[m.precio])*100)/100:0;
     if(m.desc>=0&&r[m.desc]) desc[sku]=clean(r[m.desc]).slice(0,80);
@@ -878,7 +881,7 @@ function vCargas(){
   <section class="panel"><h2>1 · Sube un archivo</h2>
     <div class="formrow">
       <div class="field"><span class="label">Tipo de archivo</span><div class="seg" role="radiogroup">${["sugerido","oc","despacho"].map(t=>`<label><input type="radio" name="uTipo" value="${t}" ${U.tipo===t?"checked":""}>${TIPO_LBL[t]}</label>`).join("")}</div></div>
-      <div class="field" style="flex:1 1 180px"><span class="label">Cliente</span><input id="uCliente" list="clientesList" value="${esc(U.cliente)}" placeholder="Si el archivo no trae columna"><datalist id="clientesList">${known.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
+      <div class="field"><span class="label">Cliente *</span><div class="seg" role="radiogroup" aria-label="Cliente">${CLIENTES.map(c=>`<label><input type="radio" name="uCli" value="${c}" ${U.cliente===c?"checked":""}>${c}</label>`).join("")}</div></div>
       ${U.tipo==="sugerido"?"":`<div class="field"><span class="label">N° OC</span><input id="uOc" value="${esc(U.oc)}" placeholder="${U.tipo==="oc"?"Si el archivo no la trae":"Opcional"}"></div>`}
       <div class="field"><span class="label">${U.tipo==="oc"?"Fecha de emisión":U.tipo==="despacho"?"Fecha de despacho":"Fecha de envío"}</span><input id="uFecha" type="date" value="${esc(U.fecha)}"></div>
       ${U.tipo==="oc"?`<div class="field"><span class="label">Fecha límite de entrega</span><input id="uVence" type="date" value="${esc(U.vence)}"></div>`:""}
@@ -978,6 +981,7 @@ let uT; $("#fUmbral").oninput=e=>{const v=Math.max(50,Math.min(100,parseInt(e.ta
 document.addEventListener("change",async e=>{
   const t=e.target, U=S.up;
   if(t.name==="uTipo"){U.tipo=t.value; render(); return;}
+  if(t.name==="uCli"){U.cliente=t.value; render(); return;}
   if(t.id==="uFile"&&t.files[0]){leerArchivo(t.files[0]); return;}
   if(t.id==="uSheet"){U.sheet=t.value; U.formato=null; cargarHoja(); render(); return;}
   if(t.id==="uHdr"){U.hdr=Math.max(0,(parseInt(t.value)||1)-1); aplicarHeader(); render(); return;}
