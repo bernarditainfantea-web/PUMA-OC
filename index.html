@@ -1052,15 +1052,16 @@ function pantallaLogin(msg){
     :`<div class="msg err">Falta configurar la conexión a Supabase en <b>config.js</b>.</div>`}</form>`;
   const f=$("#fLogin"); f.onsubmit=async e=>{e.preventDefault(); const b=f.querySelector("button"); b.disabled=true; b.textContent="Entrando…";
     const {error}=await sb.auth.signInWithPassword({email:$("#lEmail").value.trim(),password:$("#lPass").value});
-    if(error) pantallaLogin(/invalid/i.test(error.message)?"Correo o contraseña incorrectos.":error.message);};
+    if(error) pantallaLogin(/invalid/i.test(error.message)?"Correo o contraseña incorrectos. Revisa mayúsculas y que no haya espacios al final.":/confirm/i.test(error.message)?"Tu usuario no está confirmado en Supabase.":error.message);};
 }
 let canal=null, iniciado=false;
 async function iniciar(session){
   if(!session){iniciado=false; if(canal){sb.removeChannel(canal); canal=null;} pantallaLogin(); return;}
   if(iniciado) return; iniciado=true;
   S.email=(session.user.email||"").toLowerCase();
-  const {data}=await sb.from("usuarios_permitidos").select("rol").eq("email",S.email).maybeSingle();
-  if(!data){iniciado=false; await sb.auth.signOut(); pantallaLogin(`${S.email} no tiene acceso a esta plataforma.`); return;}
+  const {data,error}=await sb.from("usuarios_permitidos").select("rol").eq("email",S.email).maybeSingle();
+  if(error){iniciado=false; await sb.auth.signOut(); pantallaLogin(`La contraseña es correcta, pero falló la revisión de permisos: ${error.message}`); return;}
+  if(!data){iniciado=false; await sb.auth.signOut(); pantallaLogin(`La contraseña es correcta, pero "${S.email}" no está en la lista de usuarios permitidos.`); return;}
   S.rol=data.rol; document.body.classList.toggle("lector",S.rol==="lector"); document.body.classList.toggle("editor",S.rol==="editor");
   $("#who").textContent=S.email; $("#login").hidden=true; $("#app").hidden=false; S.dbOk=true;
   render(); await recargar();
