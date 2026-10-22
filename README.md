@@ -41,11 +41,13 @@ Para cada persona:
 - **Continuidad:** invita a una persona de tu equipo como Owner en Supabase (**Organization → Team**) y como colaboradora en GitHub, para que el sistema no dependa solo de ti.
 
 ## Uso
-1. **Cargas:** sube el sugerido, la OC (con precio unitario y fecha límite de entrega) y cada despacho, en Excel o CSV. Las columnas se detectan solas y se pueden corregir antes de guardar.
-2. **Resumen / Por SKU / Por talla:** fill rate y alertas por debajo del umbral.
-3. **Órdenes de compra:** historial, estado (Sin despacho, Parcial, Atrasada, Completa, Cerrada) y detalle con precios y despachos.
-4. **Sugeridos:** cada sugerido comparado con lo que el cliente compró después.
-5. **Notas de crédito:** flujo Solicitada → En revisión → Aprobada → Emitida → Aplicada (o Rechazada).
+Todo se organiza por **evento**: un sugerido y las OCs que nacen de él, con sus despachos.
+1. **Eventos → Nuevo evento:** elige el cliente (MELI 1P o MELI 3P), ponle nombre y sube el Excel del sugerido. El formato de sugerido PUMA (hoja con "Cod", "SUGERIDO CARGA UN." y "CURVAS A CARGAR") se lee solo.
+2. **Dentro del evento → Cargar OCs:** arrastra una o varias OCs. Quedan asociadas al evento.
+3. **Dentro de cada OC → Cargar despachos:** sube uno o varios despachos de esa OC.
+4. **El detalle del evento** muestra el avance sugerido → OC → despachado, por OC, SKU y talla.
+5. **Resumen / Por SKU / Por talla / Órdenes de compra:** fill rate y alertas de todas las OCs.
+6. **Notas de crédito:** flujo Solicitada → En revisión → Aprobada → Emitida → Aplicada (o Rechazada).
 
 ## Estructura
 ```
