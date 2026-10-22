@@ -236,7 +236,7 @@ const S={
   filtros:{cliente:"",oc:"",q:"",soloCerradas:false},
   tab:"resumen", det:{ocs:null,sugeridos:null}, sort:{k:"fr",dir:1}, abiertos:new Set(), verTodas:false,
   ocEstado:"", ocSoloPend:false, ncEstado:"",
-  up:null, ncForm:null, armado:null, downloads:true, rol:null, email:"", errDb:null
+  up:null, ncForm:null, lote:null, armado:null, downloads:true, rol:null, email:"", errDb:null
 };
 try{let t=localStorage.getItem("fr_tab"); if(t==="oc") t="ocs"; if(t) S.tab=t;}catch(e){}
 
@@ -657,7 +657,8 @@ function vOcDetalle(o){
       <div class="kpi"><span class="label">Notas de crédito</span><span class="v">${o.nc.n?fmt$(o.nc.monto):"—"}</span><span class="d">${o.nc.n} asociada${o.nc.n===1?"":"s"}${o.montoEnt&&o.nc.monto?` · ${pct(o.nc.monto/o.montoEnt)} de lo despachado`:""}</span></div>
     </div>
   </section>
-  <section class="panel"><div class="panel-h"><h2>Despachos</h2><span class="muted small">${envs.length?`Último: ${fdate(o.ultimoDesp)}`:"Sin despachos todavía"}</span></div>
+  ${loteVisible({ocKey:o.key})?vLote():""}
+  <section class="panel"><div class="panel-h"><h2>Despachos</h2><button class="btn primary upload-only" data-act="lote-desp" data-k="${esc(o.key)}" ${esDemo()?'disabled title="Sube tus OCs para usar esta opción"':""}>Cargar despachos</button><span class="muted small">${envs.length?`Último: ${fdate(o.ultimoDesp)}`:"Sin despachos todavía"}</span></div>
     ${envs.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Archivo</th><th class="r">Uds</th><th class="r">Monto</th><th>Cruce</th></tr></thead><tbody>
     ${envs.map(e=>`<tr><td class="mono">${fdate(e.fecha)}</td><td>${esc(e.archivo)}</td><td class="num r">${fmtN(e.q)}</td><td class="num r">${e.monto?fmt$(e.monto):"—"}</td><td class="small muted">${e.auto?"Asignado por SKU-talla (el despacho no traía OC)":"Por N° de OC"}</td></tr>`).join("")}
     </tbody></table></div>`:""}
@@ -713,7 +714,8 @@ function vSugDetalle(s){
     </div>
     ${embudo(s)}
   </section>
-  <section class="panel"><div class="panel-h"><h2>OCs de este sugerido</h2><span class="muted small">Para cambiar a qué sugerido pertenece una OC, ábrela.</span></div>
+  ${loteVisible({sugId:s.c.id})?vLote():""}
+  <section class="panel"><div class="panel-h"><h2>OCs de este sugerido</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">Para cambiar a qué sugerido pertenece una OC, ábrela.</span><button class="btn primary upload-only" data-act="lote-oc" data-k="${esc(s.c.id)}" ${esDemo()?'disabled title="Sube tu primer sugerido para usar esta opción"':""}>Cargar OCs</button></div></div>
     ${s.ocs.length?`<div class="tablewrap"><table><thead><tr><th>OC</th><th>Emisión</th><th>Fecha límite</th><th class="r">Uds</th><th class="r">Monto</th><th class="r">Despachado</th><th class="r">Fill rate</th><th>Último despacho</th><th>Estado</th></tr></thead><tbody>
     ${s.ocs.map(o=>`<tr class="row" data-oc-link="${esc(o.key)}"><td class="mono"><b>${esc(o.oc)}</b>${sugeridoDeOc(o).auto?' <span class="muted small" title="Asociada por fecha">(por fecha)</span>':""}</td><td class="mono">${fdate(o.fecha)}</td><td class="mono">${fdate(o.vence)}</td><td class="num r">${fmtN(o.ocQ)}</td><td class="num r">${o.montoOc?fmt$(o.montoOc):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.desp?frBar(o.fr,u):'<span class="muted">—</span>'}</td><td class="mono">${fdate(o.ultimoDesp)}</td><td>${estOc(o.estado)}</td></tr>`).join("")}
     </tbody></table></div>`:`<div class="muted small">Todavía no hay OCs asociadas. Al subir una OC de ${esc(s.clientes.join(", "))}, elige este sugerido.</div>`}
@@ -853,8 +855,8 @@ function cargarHoja(){
   U.hdr=detectarHeader(U.aoa); aplicarHeader();
 }
 function aplicarHeader(){const U=S.up; const a=autoMap(U.aoa[U.hdr]||[]); U.map=a.map; U.sizeCols=a.sizeCols; U.wide=a.wide;}
-function construir(){
-  const U=S.up, hdrs=U.aoa[U.hdr]||[], m=U.map, filas=[], desc={}, errores=[];
+function construir(U=S.up){
+  const hdrs=U.aoa[U.hdr]||[], m=U.map, filas=[], desc={}, errores=[];
   if(m.sku<0) errores.push("Falta indicar la columna de SKU.");
   if(!U.wide&&m.talla<0) errores.push("Falta la columna de talla (o marca las tallas en columnas).");
   if(U.wide&&!U.sizeCols.length) errores.push("Marca qué columnas son tallas.");
@@ -960,14 +962,80 @@ async function guardar(){
   }catch(e){ U.guardando=false; U.msg=["err",/sugerido_id/.test(errTxt(e))?"Falta actualizar la base de datos: corre en Supabase la línea nueva de schema.sql (sugerido_id) y vuelve a guardar.":"No se pudo guardar: "+errTxt(e)]; }
   render();
 }
-function metaDe(id,b){
-  const U=S.up, ocs=[...new Set(b.filas.map(f=>f[0]+"|"+f[1]))].filter(k=>!k.endsWith("|")), clientes=[...new Set(b.filas.map(f=>f[0]))];
+function metaDe(id,b,U=S.up){
+  const ocs=[...new Set(b.filas.map(f=>f[0]+"|"+f[1]))].filter(k=>!k.endsWith("|")), clientes=[...new Set(b.filas.map(f=>f[0]))];
   const ocLbl=[...new Set(b.filas.map(f=>f[1]).filter(Boolean))];
   const sugeridoId=U.tipo==="oc"?(U.sugId??sugeridoPorFecha(U.cliente,U.fecha))||null:null;
   return {id,sugeridoId,tipo:U.tipo,cliente:clientes.length===1?clientes[0]:"",clientes:clientes.slice(0,20),ocs:ocs.slice(0,300),ocLbl:ocLbl.length>3?ocLbl.length+" OCs":ocLbl.join(", "),fecha:U.fecha,vence:U.tipo==="oc"?U.vence:"",archivo:U.file?.name||"",creado:new Date().toISOString(),filas:b.filas.length,unidades:b.filas.reduce((s,f)=>s+f[4],0),monto:b.filas.reduce((s,f)=>s+f[4]*f[5],0)};
 }
 function resetUp(){const t=S.up?.tipo||"oc"; S.up={tipo:t,cliente:"",oc:"",fecha:hoy(),vence:"",file:null,wb:null,sheet:"",aoa:null,hdr:0,map:{},wide:false,sizeCols:[],reemplazar:true,msg:null,guardando:false,sugId:null};}
 resetUp();
+/* ---------- Carga de varios archivos a la vez ----------
+   Desde un sugerido: varias OCs, todas asociadas a ese sugerido.
+   Desde una OC: varios despachos, todos con ese N° de OC. */
+function loteNuevo(tipo,base){ S.lote={tipo,...base,items:[],guardando:false,msg:null}; }
+function loteVisible(ctx){ const L=S.lote; return L&&(ctx.sugId?L.tipo==="oc"&&L.sugId===ctx.sugId:L.tipo==="despacho"&&L.ocKey===ctx.ocKey); }
+async function loteAgregar(files){
+  const L=S.lote; if(!L) return;
+  for(const file of files){
+    const it={tipo:L.tipo,cliente:L.cliente,oc:L.tipo==="despacho"?L.oc:"",fecha:hoy(),vence:"",sugId:L.sugId||null,reemplazar:true,file,estado:"pendiente",err:null};
+    try{
+      const buf=await file.arrayBuffer();
+      it.wb=XLSX.read(buf,/\.(csv|txt)$/i.test(file.name)?{type:"array",raw:true}:{type:"array"});
+      it.sheet=it.wb.SheetNames[0]; it.aoa=XLSX.utils.sheet_to_json(it.wb.Sheets[it.sheet],{header:1,raw:true,defval:""});
+      it.hdr=detectarHeader(it.aoa); const a=autoMap(it.aoa[it.hdr]||[]); it.map=a.map; it.sizeCols=a.sizeCols; it.wide=a.wide;
+      if(L.tipo==="oc"&&it.map.oc<0){const m=file.name.match(/\d{5,}/); if(m) it.oc=m[0];}
+    }catch(e){ it.err="No pude leer el archivo. Sube un .xlsx, .xls o .csv."; }
+    L.items.push(it);
+  }
+  render();
+}
+function vLote(){
+  const L=S.lote, esOc=L.tipo==="oc";
+  const filas=L.items.map((it,i)=>{
+    const b=it.err?{filas:[],errores:[it.err]}:construir(it);
+    it._b=b; const ok=!b.errores.length;
+    const ocCol=it.map&&it.map.oc>=0;
+    const nOcs=ok?new Set(b.filas.map(f=>f[1])).size:0;
+    const uds=b.filas.reduce((s,f)=>s+f[4],0), monto=b.filas.reduce((s,f)=>s+f[4]*f[5],0);
+    const est=it.estado==="guardado"?'<span class="sev ok">Guardado</span>':it.estado==="error"?`<span class="sev crit">Error</span><div class="small" style="white-space:normal;max-width:30ch;color:var(--crit)">${esc(it.err)}</div>`:ok?'<span class="sev info">Listo</span>':`<span class="sev warn">Revisar</span><div class="small muted" style="white-space:normal;max-width:30ch">${esc(b.errores[0])}</div>`;
+    const lock=it.estado==="guardado"||L.guardando?"disabled":"";
+    return `<tr><td style="white-space:normal;max-width:26ch">${esc(it.file.name)}</td>
+      ${esOc?`<td>${ocCol?`<span class="mono">${nOcs} OC${nOcs===1?"":"s"} en el archivo</span>`:`<input class="tin wide" data-li="${i}:oc" value="${esc(it.oc)}" placeholder="N° OC" ${lock}>`}</td>`:""}
+      <td><input class="tin" style="width:140px" type="date" data-li="${i}:fecha" value="${esc(it.fecha)}" ${lock}></td>
+      ${esOc?`<td><input class="tin" style="width:140px" type="date" data-li="${i}:vence" value="${esc(it.vence)}" ${lock}></td>`:""}
+      <td class="num r">${ok?fmtN(new Set(b.filas.map(f=>f[2])).size):"—"}</td><td class="num r">${ok?fmtN(uds):"—"}</td><td class="num r">${ok&&monto?fmt$(monto):"—"}</td>
+      <td>${est}</td><td>${it.estado==="guardado"?"":`<button class="btn small-btn" data-act="lote-quitar" data-i="${i}" ${lock}>Quitar</button>`}</td></tr>`;
+  }).join("");
+  const listos=L.items.filter(it=>it.estado!=="guardado"&&it._b&&!it._b.errores.length).length;
+  return `<section class="panel" aria-label="Carga de varios archivos">
+    <div class="panel-h"><h2>${esOc?"Cargar OCs de este sugerido":"Cargar despachos de esta OC"}</h2><button class="btn small-btn" data-act="lote-cerrar">Cerrar</button></div>
+    <p class="how">${esOc?`Las OCs quedan asociadas a este sugerido y al cliente <b>${esc(L.cliente)}</b>. Si el archivo no trae el N° de OC, escríbelo (se toma del nombre del archivo cuando trae un número).`:`Todos los archivos quedan como despachos de la OC <b>${esc(L.oc)}</b> de <b>${esc(L.cliente)}</b>. Pon la fecha de cada despacho.`}</p>
+    <label class="drop" id="loteDrop" tabindex="0"><input type="file" id="loteFile" accept=".xlsx,.xls,.csv" multiple hidden>Arrastra aquí uno o varios archivos, o haz clic para elegirlos</label>
+    ${L.items.length?`<div class="tablewrap"><table><thead><tr><th>Archivo</th>${esOc?"<th>N° OC</th>":""}<th>${esOc?"Emisión":"Fecha despacho"}</th>${esOc?"<th>Fecha límite</th>":""}<th class="r">SKUs</th><th class="r">Uds</th><th class="r">Monto</th><th>Estado</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`:""}
+    ${L.msg?`<div class="msg ${L.msg[0]}">${esc(L.msg[1])}</div>`:""}
+    ${L.items.length?`<div class="formrow"><button class="btn primary" data-act="lote-guardar" ${listos&&!L.guardando?"":"disabled"}>${L.guardando?"Guardando…":`Guardar ${listos} archivo${listos===1?"":"s"}`}</button><span class="muted small">Los archivos con “Revisar” súbelos por la pestaña Cargas para ajustar sus columnas.</span></div>`:""}
+  </section>`;
+}
+async function loteGuardar(){
+  const L=S.lote; if(!L||L.guardando) return; L.guardando=true; L.msg=null; render();
+  let ok=0, mal=0;
+  for(const it of L.items){
+    if(it.estado==="guardado"||!it._b||it._b.errores.length) continue;
+    try{
+      const b=construir(it);
+      if(it.tipo==="oc"&&it.reemplazar){
+        const keys=new Set(b.filas.map(f=>f[0]+"|"+f[1]));
+        for(const c of S.cargas.filter(c=>c.tipo==="oc"&&(c.ocs||[]).some(k=>keys.has(k)))) await API.borrarCarga(c.id);
+      }
+      await API.guardarCarga(metaDe(null,b,it),b.filas,b.desc); it.estado="guardado"; ok++;
+    }catch(e){ it.estado="error"; it.err=/sugerido_id/.test(errTxt(e))?"Falta correr en Supabase la línea de sugerido_id de schema.sql.":errTxt(e); mal++; }
+    render();
+  }
+  L.guardando=false; L.msg=mal?["warn",`${ok} guardado${ok===1?"":"s"}, ${mal} con error.`]:["ok",`${ok} archivo${ok===1?"":"s"} guardado${ok===1?"":"s"}.`];
+  await recargar();
+}
+
 /* ---------- Exportar ---------- */
 async function exportar(){
   const {skuList,tallaList,ocList,A,Lall,ncs,desc}=R;
@@ -1003,8 +1071,13 @@ document.addEventListener("click",async e=>{
   if(a==="manual"){e.preventDefault(); S.up.manual=!S.up.manual; render();}
   if(a==="guardar") guardar();
   if(a==="cancelar"){resetUp(); render();}
-  if(a==="volver-oc"){S.det.ocs=null; render();}
-  if(a==="volver-sug"){S.det.sugeridos=null; render();}
+  if(a==="volver-oc"){S.det.ocs=null; S.lote=null; render();}
+  if(a==="lote-oc"){const c=R.cargas.find(x=>x.id===t.dataset.k); loteNuevo("oc",{sugId:c.id,cliente:c.cliente||(c.clientes||[])[0]||""}); render();}
+  if(a==="lote-desp"){const o=R.ocs.get(t.dataset.k); loteNuevo("despacho",{ocKey:o.key,oc:o.oc,cliente:o.cliente}); render();}
+  if(a==="lote-cerrar"){S.lote=null; render();}
+  if(a==="lote-quitar"&&S.lote){S.lote.items.splice(+t.dataset.i,1); render();}
+  if(a==="lote-guardar") loteGuardar();
+  if(a==="volver-sug"){S.det.sugeridos=null; S.lote=null; render();}
   if(a==="nc-nueva"){ncNueva({cliente:S.filtros.cliente}); render();}
   if(a==="nc-desde-oc"){const o=R.ocs.get(t.dataset.k); ncNueva({cliente:o.cliente,oc:o.oc}); irTab("nc");}
   if(a==="nc-editar"){const n=S.ncs.find(x=>x.id===t.dataset.id); if(n){S.ncForm={...n,monto:String(n.monto||""),lineas:(n.lineas||[]).map(l=>({...l})),err:null}; render(); window.scrollTo({top:0});}}
@@ -1031,6 +1104,8 @@ document.addEventListener("change",async e=>{
   if(t.id==="uHdr"){U.hdr=Math.max(0,(parseInt(t.value)||1)-1); aplicarHeader(); render(); return;}
   if(t.id==="ocSoloPend"){S.ocSoloPend=t.checked; render(); return;}
   if(t.id==="uSug"){U.sugId=t.value; render(); return;}
+  if(t.id==="loteFile"&&t.files.length){loteAgregar([...t.files]); return;}
+  if(t.dataset.li&&S.lote){const [i,k]=t.dataset.li.split(":"); S.lote.items[+i][k]=t.value; render(); return;}
   if(t.dataset.ocsug!=null){const o=R.ocs.get(t.dataset.ocsug); if(o){try{await API.setSugeridoOc(o.cargaIds,t.value); await recargar();}catch(e){alertaGlobal(/sugerido_id/.test(errTxt(e))?"Falta actualizar la base de datos: corre en Supabase la línea nueva de schema.sql (sugerido_id).":errTxt(e));}} return;}
   if(t.dataset.map){const f=t.dataset.map; if(f==="talla"&&t.value==="wide"){U.wide=true; if(!U.sizeCols.length) U.sizeCols=(U.aoa[U.hdr]||[]).map((h,i)=>i).filter(i=>esTallaHeader(U.aoa[U.hdr][i]));} else {if(f==="talla") U.wide=false; U.map[f]=parseInt(t.value);} render(); return;}
   if(t.dataset.size!=null){const i=+t.dataset.size; U.sizeCols=t.checked?[...U.sizeCols,i]:U.sizeCols.filter(x=>x!==i); render(); return;}
@@ -1051,11 +1126,13 @@ document.addEventListener("input",e=>{const t=e.target,U=S.up;
 let dR; function debRender(){clearTimeout(dR); dR=setTimeout(()=>{const ae=document.activeElement; const key=ae?.id||ae?.dataset?.ncl; render();
   const el=ae?.id?document.getElementById(ae.id):ae?.dataset?.ncl?document.querySelector(`[data-ncl="${ae.dataset.ncl}"]`):null;
   if(el&&key){el.focus(); const v=el.value; try{el.setSelectionRange(v.length,v.length);}catch(_){}}},500);}
-document.addEventListener("dragover",e=>{const d=e.target.closest?.("#drop"); if(d){e.preventDefault(); d.classList.add("over");}});
-document.addEventListener("dragleave",e=>{const d=e.target.closest?.("#drop"); if(d) d.classList.remove("over");});
-document.addEventListener("drop",e=>{const d=e.target.closest?.("#drop"); if(d){e.preventDefault(); d.classList.remove("over"); const f=e.dataTransfer.files[0]; if(f) leerArchivo(f);}});
+document.addEventListener("dragover",e=>{const d=e.target.closest?.("#drop,#loteDrop"); if(d){e.preventDefault(); d.classList.add("over");}});
+document.addEventListener("dragleave",e=>{const d=e.target.closest?.("#drop,#loteDrop"); if(d) d.classList.remove("over");});
+document.addEventListener("drop",e=>{const ld=e.target.closest?.("#loteDrop"); if(ld){e.preventDefault(); ld.classList.remove("over"); loteAgregar([...e.dataTransfer.files]); return;}
+  const d=e.target.closest?.("#drop"); if(d){e.preventDefault(); d.classList.remove("over"); const f=e.dataTransfer.files[0]; if(f) leerArchivo(f);}});
 document.addEventListener("keydown",e=>{
   if(e.target.id==="drop"&&(e.key==="Enter"||e.key===" ")){e.preventDefault(); $("#uFile").click();}
+  if(e.target.id==="loteDrop"&&(e.key==="Enter"||e.key===" ")){e.preventDefault(); $("#loteFile").click();}
   const r=e.target.closest?.("tr.row"); if(r&&(e.key==="Enter")) r.click();
 });
 const tip=$("#tip");
