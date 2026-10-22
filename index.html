@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Control Fill Rate PUMA</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: barra de filtros fija arriba, pestañas, y vistas de trabajo densas (resumen → SKU → talla → OC → cargas) */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --sunken:#eaeef3; --ink:#141a21; --muted:#5a6573; --line:#d9dfe6;
+  --accent:#2347c4; --accent-soft:#e5ebfb; --accent-ink:#ffffff;
+  --ok:#1b7647; --ok-bg:#e2f2e9; --warn:#9a5b00; --warn-bg:#faefd9; --crit:#bb3127; --crit-bg:#fbe5e2;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1217; --surface:#161b22; --sunken:#1d232c; --ink:#e7ecf1; --muted:#97a2ae; --line:#2a323c;
+  --accent:#86a0ff; --accent-soft:#1d2746; --accent-ink:#0e1217;
+  --ok:#55c48b; --ok-bg:#14301f; --warn:#e4a744; --warn-bg:#33270e; --crit:#f2766a; --crit-bg:#3b1a17; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1217; --surface:#161b22; --sunken:#1d232c; --ink:#e7ecf1; --muted:#97a2ae; --line:#2a323c;
+  --accent:#86a0ff; --accent-soft:#1d2746; --accent-ink:#0e1217;
+  --ok:#55c48b; --ok-bg:#14301f; --warn:#e4a744; --warn-bg:#33270e; --crit:#f2766a; --crit-bg:#3b1a17; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;font-size:14px}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+.wrap{max-width:1280px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:grid;gap:18px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:30px;line-height:1.05}
+h2{font-size:21px}
+h3{font-size:17px}
+.num,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.label{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+header.top .sub{color:var(--muted);font-size:14px;margin-top:4px}
+.btn{font:inherit;font-weight:600;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:6px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--crit)}
+.btn.danger.armed{background:var(--crit);border-color:var(--crit);color:var(--surface)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.banner{border:1px dashed var(--warn);background:var(--warn-bg);color:var(--ink);padding:10px 14px;border-radius:6px;font-size:14px}
+.banner b{color:var(--warn)}
+
+.filters{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.field{display:grid;gap:4px;min-width:0}
+.field input,.field select{font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);min-width:0}
+.field input[type=number]{width:80px}
+.check{display:flex;align-items:center;gap:6px;font-size:14px;padding-bottom:8px}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{font:inherit;font-family:var(--f-display);font-size:17px;font-weight:600;letter-spacing:.02em;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:8px 14px;cursor:pointer;white-space:nowrap}
+.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab .count{font-family:var(--f-mono);font-size:12px;background:var(--crit-bg);color:var(--crit);border-radius:10px;padding:1px 7px;margin-left:6px}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;gap:4px}
+.kpi .v{font-family:var(--f-display);font-size:38px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.kpi .v.ok{color:var(--ok)} .kpi .v.warn{color:var(--warn)} .kpi .v.crit{color:var(--crit)}
+.kpi .d{font-size:13px;color:var(--muted)}
+
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px}
+@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;align-content:start;min-width:0}
+.panel-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+
+.alerts{display:grid;gap:8px}
+.alert{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 10px;border-radius:6px;background:var(--sunken)}
+.alert .t{font-weight:600}
+.alert .x{font-size:13px;color:var(--muted)}
+.alert .q{font-family:var(--f-mono);font-size:13px;text-align:right;white-space:nowrap}
+.sev{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.sev.crit{background:var(--crit-bg);color:var(--crit)} .sev.warn{background:var(--warn-bg);color:var(--warn)} .sev.info{background:var(--accent-soft);color:var(--accent)} .sev.ok{background:var(--ok-bg);color:var(--ok)}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;background:var(--sunken);position:sticky;top:0}
+th.sort{cursor:pointer;user-select:none} th.sort:hover{color:var(--ink)}
+td.r,th.r{text-align:right}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tr.row{cursor:pointer} tr.row:hover td{background:var(--sunken)}
+tr.detail td{background:var(--sunken);white-space:normal}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-family:var(--f-mono);font-size:12px;padding:1px 6px;border-radius:4px;white-space:nowrap}
+.chip.ok{background:var(--ok-bg);color:var(--ok)} .chip.warn{background:var(--warn-bg);color:var(--warn)} .chip.crit{background:var(--crit-bg);color:var(--crit)}
+.frcell{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.bar{width:60px;height:6px;background:var(--sunken);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px}
+.bg-ok{background:var(--ok)} .bg-warn{background:var(--warn)} .bg-crit{background:var(--crit)}
+
+.curve{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(64px,1fr);gap:6px;overflow-x:auto;padding:4px 0}
+.cv{border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:6px 8px;display:grid;gap:2px;font-size:12px}
+.cv .tl{font-family:var(--f-display);font-size:16px;font-weight:700}
+.cv .fr{font-family:var(--f-mono);font-weight:500}
+.cv.crit{border-color:var(--crit)} .cv.warn{border-color:var(--warn)}
+
+.heat td.c{text-align:center;font-family:var(--f-mono);font-size:12.5px;padding:6px 4px;min-width:46px}
+.heat td.c.ok{background:var(--ok-bg);color:var(--ok)} .heat td.c.warn{background:var(--warn-bg);color:var(--warn)} .heat td.c.crit{background:var(--crit-bg);color:var(--crit);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+svg text{fill:var(--muted);font-family:var(--f-mono);font-size:11px}
+svg .lbl{fill:var(--ink);font-weight:500}
+svg .grid{stroke:var(--line);stroke-width:1}
+svg .thr{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 4;opacity:.7}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg label{padding:7px 14px;cursor:pointer;font-weight:600;font-size:14px;border-right:1px solid var(--line)}
+.seg label:last-child{border-right:0}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--accent);color:var(--accent-ink)}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+.drop{border:2px dashed var(--line);border-radius:8px;padding:22px;text-align:center;color:var(--muted);cursor:pointer;background:var(--sunken)}
+.drop.over{border-color:var(--accent);color:var(--ink)}
+.formrow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.maps{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.sizecols{display:flex;flex-wrap:wrap;gap:6px}
+.sizecols label{font-family:var(--f-mono);font-size:13px;border:1px solid var(--line);border-radius:4px;padding:3px 8px;display:flex;gap:5px;align-items:center}
+.msg{font-size:14px;padding:8px 12px;border-radius:6px}
+.msg.err{background:var(--crit-bg);color:var(--crit)} .msg.ok{background:var(--ok-bg);color:var(--ok)} .msg.warn{background:var(--warn-bg);color:var(--warn)}
+.hist{display:grid;gap:8px}
+.hrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.pill{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+#tip{position:fixed;pointer-events:none;z-index:50;background:var(--ink);color:var(--bg);font-size:12.5px;padding:6px 9px;border-radius:5px;max-width:260px;white-space:pre-line}
+.how{font-size:14px;color:var(--muted);max-width:70ch}
+.how b{color:var(--ink)}
+.sev.neutral{background:var(--sunken);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
+.fchips{display:flex;flex-wrap:wrap;gap:6px}
+.fchip{font:inherit;font-size:13.5px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:20px;padding:5px 12px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.fchip .num{font-size:12px;color:var(--muted)}
+.fchip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.fchip[aria-pressed=true] .num{color:inherit}
+.dh{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px}
+.ncgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+@media (max-width:560px){.ncgrid .field[style*="span 2"]{grid-column:auto!important}}
+.tin{font:inherit;font-family:var(--f-mono);font-size:13px;padding:5px 7px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink);width:80px}
+.tin.wide{width:140px} .tin.r{text-align:right}
+.btn.small-btn{padding:4px 10px;font-size:13px}
+.estsel{font:inherit;font-size:12.5px;font-weight:700;border-radius:4px;padding:3px 6px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.estsel.ok{background:var(--ok-bg);color:var(--ok)} .estsel.warn{background:var(--warn-bg);color:var(--warn)} .estsel.info{background:var(--accent-soft);color:var(--accent)} .estsel.neutral{color:var(--muted)}
+a{color:var(--accent)}
+.login{min-height:100vh;display:grid;place-items:center;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.login form{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:28px;display:grid;gap:14px;width:min(380px,100%)}
+.login input{font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+body.lector #btnIrCargar,body.lector [data-act=nc-nueva],body.lector [data-act=nc-desde-oc],body.lector [data-act=nc-editar],body.lector [data-ncdel],body.lector [data-del],body.lector .upload-only{display:none!important}
+body.lector [data-ncest],body.lector [data-cerrar]{pointer-events:none;opacity:.7}
+body.editor [data-ncdel]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<div id="login" class="login" hidden></div>
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div>
+      <h1>Control Fill Rate · PUMA</h1>
+      <div class="sub">Sugeridos, órdenes de compra, despachos y notas de crédito, revisados a nivel SKU y talla</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <span class="muted small" id="who" style="align-self:center"></span>
+      <button class="btn" id="btnSalir">Salir</button>
+      <button class="btn" id="btnExport" hidden>Descargar Excel</button>
+      <button class="btn primary" id="btnIrCargar">Subir archivo</button>
+    </div>
+  </header>
+
+  <div id="banner"></div>
+
+  <section class="filters" aria-label="Filtros">
+    <div class="field"><span class="label">Cliente</span><select id="fCliente"></select></div>
+    <div class="field"><span class="label">Orden de compra</span><select id="fOc"></select></div>
+    <div class="field" style="flex:1 1 180px"><span class="label">Buscar</span><input id="fQ" type="search" placeholder="Ej. 390117"></div>
+    <div class="field"><span class="label">Umbral alerta</span><div style="display:flex;align-items:center;gap:4px"><input id="fUmbral" type="number" min="50" max="100" step="1"><span class="muted">%</span></div></div>
+    <label class="check"><input type="checkbox" id="fCerradas"> Solo OCs cerradas</label>
+  </section>
+
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <main id="view"></main>
+</div>
+<div id="tip" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtN=n=>Math.round(n||0).toLocaleString("es-CL");
+const fmt$=n=>(n<0?"−$":"$")+Math.round(Math.abs(n||0)).toLocaleString("es-CL");
+const pct=(x,d=1)=>x==null||!isFinite(x)?"—":(x*100).toFixed(d).replace(".",",")+"%";
+const hoy=()=>new Date().toISOString().slice(0,10);
+const fdate=d=>d?String(d).slice(8,10)+"-"+String(d).slice(5,7)+"-"+String(d).slice(0,4):"—";
+
+/* ---------- Estado ---------- */
+const S={
+  db:null, dbOk:false, cargas:[], partes:{}, ncs:[], config:{umbral:90}, estadoOc:{},
+  filtros:{cliente:"",oc:"",q:"",soloCerradas:false},
+  tab:"resumen", det:{ocs:null,sugeridos:null}, sort:{k:"fr",dir:1}, abiertos:new Set(), verTodas:false,
+  ocEstado:"", ocSoloPend:false, ncEstado:"",
+  up:null, ncForm:null, armado:null, downloads:true, rol:null, email:"", errDb:null
+};
+try{let t=localStorage.getItem("fr_tab"); if(t==="oc") t="ocs"; if(t) S.tab=t;}catch(e){}
+
+/* ---------- Normalización ---------- */
+const ALPHA=["XXS","XS","S","M","L","XL","XXL","XXXL","4XL","5XL"];
+const normSku=s=>String(s??"").trim().toUpperCase().replace(/\s+/g,"");
+function normTalla(t){
+  let s=String(t??"").trim().toUpperCase().replace(",",".");
+  if(/^\d+(\.\d+)?$/.test(s)) s=String(parseFloat(s));
+  const m={"2XL":"XXL","3XL":"XXXL","2XS":"XXS","XXXXL":"4XL","U":"OSFA","UNICA":"OSFA","ÚNICA":"OSFA","TU":"OSFA","OS":"OSFA","T/U":"OSFA"};
+  return m[s]||s;
+}
+function tallaRank(t){const i=ALPHA.indexOf(t);if(i>=0)return[1,i,""];if(/^\d+(\.\d+)?$/.test(t))return[0,parseFloat(t),""];return[2,0,t];}
+function sortTallas(a){return a.slice().sort((x,y)=>{const A=tallaRank(x),B=tallaRank(y);return A[0]-B[0]||A[1]-B[1]||A[2].localeCompare(B[2]);});}
+function num(v){
+  if(typeof v==="number") return v;
+  let s=String(v??"").trim().replace(/[\s$]/g,""); if(!s) return 0;
+  if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s=s.replace(/\./g,"");
+  s=s.replace(",","."); const n=parseFloat(s); return isFinite(n)?n:0;
+}
+const clean=v=>String(v??"").trim();
+const st=(fr,u)=>fr==null||!isFinite(fr)?"na":fr>=u?"ok":fr>=u-0.15?"warn":"crit";
+const ocKey=(c,o)=>(c+"__"+o).replace(/[^A-Za-z0-9_\-.~:@+]/g,c=>"+"+c.charCodeAt(0).toString(16));
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+
+/* ---------- Datos de ejemplo (solo en memoria, nunca se guardan) ---------- */
+function demo(){
+  let s=11; const R=()=>(s=(s*16807)%2147483647)/2147483647;
+  const calz=["38","39","40","41","42","43","44"], ropa=["XS","S","M","L","XL","XXL"];
+  const skus=[["EJ-390117-01","Zapatilla running negra",calz,.95,54990],["EJ-390117-02","Zapatilla running blanca",calz,.82,54990],["EJ-374915-05","Zapatilla urbana gris",calz,.9,49990],
+    ["EJ-586680-01","Polera essentials negra",ropa,.97,12990],["EJ-586680-02","Polera essentials blanca",ropa,.7,12990],["EJ-847263-03","Polerón con capucha azul",ropa,.88,29990],
+    ["EJ-521402-01","Short training negro",ropa,.99,15990],["EJ-658934-04","Calza training mujer",ropa,.6,19990],["EJ-307234-11","Zapatilla fútbol",calz,.93,44990],
+    ["EJ-930412-01","Buzo completo",ropa,.85,39990],["EJ-195004-06","Zapatilla niño",["28","29","30","31","32","33"],.9,29990],["EJ-404521-02","Chaqueta cortaviento",ropa,.98,34990]];
+  const cargas=[], partes={}, desc={};
+  const add=(id,meta,filas)=>{cargas.push({id,...meta,filas:filas.length,unidades:filas.reduce((a,f)=>a+f[4],0)}); partes[id]=[{filas,desc}];};
+  const plan=[["Cliente ejemplo A",[["OC-EJ-1001","2026-09-10","2026-10-05"],["OC-EJ-1002","2026-09-12","2026-11-15"]]],["Cliente ejemplo B",[["OC-EJ-2001","2026-09-15","2026-10-10"]]]];
+  plan.forEach(([cli,ocs],ci)=>{
+    const sug=[], oc={}, desp=[], pend=[];
+    skus.forEach(([sku,d,tallas,base,precio],si)=>{
+      desc[sku]=d; const [ocn]=ocs[si%ocs.length];
+      tallas.forEach((t,ti)=>{
+        const mid=1-Math.abs(ti-(tallas.length-1)/2)/tallas.length;
+        const sq=Math.round(4+R()*10+mid*14); sug.push([cli,"",sku,t,sq,precio]);
+        if((si+ci)%5===4) return;
+        const q=Math.max(0,Math.round(sq*(.55+R()*.5))); if(!q) return;
+        (oc[ocn]=oc[ocn]||[]).push([cli,ocn,sku,t,q,precio]);
+        if(ocn==="OC-EJ-1002"){ if(si%3===0) pend.push([cli,ocn,sku,t,Math.round(q*.5),precio]); return; }
+        let r=base+(R()-.5)*.1; if(ti===tallas.length-1||ti===0) r-=.3; if(t==="XL") r-=.25;
+        if(sku==="EJ-658934-04"&&t==="M") r=0;
+        const dq=Math.max(0,Math.min(q+1,Math.round(q*r)));
+        if(dq) desp.push([cli,ocn,sku,t,dq,precio]);
+      });
+    });
+    add("demo-sug-"+ci,{tipo:"sugerido",cliente:cli,fecha:"2026-09-01",archivo:"sugerido_"+(ci?"B":"A")+"_temporada.xlsx",creado:"2026-09-01"},sug);
+    ocs.forEach(([ocn,f,v])=>{ if(oc[ocn]) add("demo-oc-"+ocn,{tipo:"oc",cliente:cli,ocLbl:ocn,ocs:[cli+"|"+ocn],fecha:f,vence:v,archivo:ocn+".xlsx",creado:f},oc[ocn]); });
+    add("demo-desp-"+ci,{tipo:"despacho",cliente:cli,fecha:"2026-10-01",archivo:"despacho_"+(ci?"B":"A")+"_01-10.xlsx",creado:"2026-10-01"},desp);
+    if(pend.length) add("demo-desp2-"+ci,{tipo:"despacho",cliente:cli,fecha:"2026-10-18",archivo:"despacho_A_18-10.xlsx",creado:"2026-10-18"},pend);
+  });
+  const ncs=[
+    {id:"demo-nc1",numero:"",cliente:"Cliente ejemplo A",oc:"OC-EJ-1001",fecha:"2026-10-08",motivo:"Devolución",estado:"En revisión",monto:259850,lineas:[{sku:"EJ-390117-02",talla:"42",q:5,precio:51970}],notas:"Cliente reporta falla de pegado en 5 pares.",historial:[{estado:"Solicitada",fecha:"2026-10-08"},{estado:"En revisión",fecha:"2026-10-10"}]},
+    {id:"demo-nc2",numero:"NC 10482",cliente:"Cliente ejemplo B",oc:"OC-EJ-2001",fecha:"2026-10-03",motivo:"Diferencia de precio",estado:"Emitida",monto:84000,lineas:[],notas:"Precio de lista vs precio acordado en el sugerido.",historial:[{estado:"Solicitada",fecha:"2026-10-03"},{estado:"Aprobada",fecha:"2026-10-06"},{estado:"Emitida",fecha:"2026-10-09"}]},
+    {id:"demo-nc3",numero:"",cliente:"Cliente ejemplo A",oc:"",fecha:"2026-10-15",motivo:"Descuento comercial",estado:"Solicitada",monto:350000,lineas:[],notas:"Aporte a liquidación de fin de temporada.",historial:[{estado:"Solicitada",fecha:"2026-10-15"}]}];
+  return {cargas,partes,ncs};
+}
+const DEMO=demo();
+
+/* ---------- Fuente de filas ---------- */
+const esDemo=()=>S.cargas.length===0;
+function fuente(){
+  const cargas=esDemo()?DEMO.cargas:S.cargas, partes=esDemo()?DEMO.partes:S.partes;
+  const filas={sug:[],oc:[],desp:[]}, desc={};
+  for(const c of cargas){
+    const ps=partes[c.id]; if(!ps) continue;
+    const dest=c.tipo==="sugerido"?filas.sug:c.tipo==="oc"?filas.oc:filas.desp;
+    for(const p of ps){
+      Object.assign(desc,p.desc||{});
+      for(const f of p.filas) dest.push({cliente:f[0],oc:f[1],sku:f[2],talla:f[3],q:f[4],precio:f[5]||0,fecha:c.fecha||"",vence:c.vence||"",carga:c.id,archivo:c.archivo||""});
+    }
+  }
+  return {filas,desc,cargas,ncs:esDemo()&&!S.ncs.length?DEMO.ncs:S.ncs};
+}
+
+/* ---------- Cálculo ---------- */
+function calcular(){
+  const u=(S.config.umbral||90)/100, F=S.filtros, H=hoy();
+  const {filas,desc,cargas,ncs}=fuente();
+  const inC=r=>!F.cliente||r.cliente===F.cliente;
+  const precioRef=new Map();
+  for(const r of [...filas.sug,...filas.oc]) if(r.precio>0){precioRef.set(r.sku+"|"+r.talla,r.precio); precioRef.set(r.sku,r.precio);}
+  const pr=(sku,talla,p)=>p>0?p:(precioRef.get(sku+"|"+talla)||precioRef.get(sku)||0);
+
+  const lines=new Map(), ocInfo=new Map();
+  for(const r of filas.oc){ if(!inC(r)) continue;
+    const ok=r.cliente+"|"+r.oc;
+    let o=ocInfo.get(ok); if(!o){o={cliente:r.cliente,oc:r.oc,fecha:r.fecha,vence:r.vence,cargas:new Set()};ocInfo.set(ok,o);}
+    o.cargas.add(r.carga); if(r.fecha&&r.fecha<o.fecha)o.fecha=r.fecha; if(r.vence)o.vence=r.vence;
+    const k=[r.cliente,r.oc,r.sku,r.talla].join("|");
+    let l=lines.get(k); if(!l){l={cliente:r.cliente,oc:r.oc,sku:r.sku,talla:r.talla,ocQ:0,desp:0,precio:0,fecha:r.fecha,envios:[]};lines.set(k,l);}
+    l.ocQ+=r.q; if(r.precio>0) l.precio=r.precio;
+  }
+  for(const l of lines.values()) if(!l.precio) l.precio=pr(l.sku,l.talla,0);
+  const sinOc=[], pool=[];
+  for(const r of filas.desp){ if(!inC(r)) continue;
+    const env={carga:r.carga,archivo:r.archivo,fecha:r.fecha};
+    if(r.oc){const l=lines.get([r.cliente,r.oc,r.sku,r.talla].join("|"));
+      if(l){l.desp+=r.q; l.envios.push({...env,q:r.q});}
+      else sinOc.push({...r,motivo:ocInfo.has(r.cliente+"|"+r.oc)?"SKU/talla no está en la OC":"OC no cargada"});}
+    else pool.push(r);
+  }
+  if(pool.length){
+    const idx=new Map();
+    for(const l of lines.values()){const k=[l.cliente,l.sku,l.talla].join("|"); (idx.get(k)||idx.set(k,[]).get(k)).push(l);}
+    for(const a of idx.values()) a.sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+    pool.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+    for(const r of pool){
+      const arr=idx.get([r.cliente,r.sku,r.talla].join("|"));
+      if(!arr){sinOc.push({...r,motivo:"Sin OC que lo pida"});continue;}
+      let rest=r.q;
+      for(const l of arr){const t=Math.min(Math.max(0,l.ocQ-l.desp),rest); if(t>0){l.desp+=t; l.envios.push({carga:r.carga,archivo:r.archivo,fecha:r.fecha,q:t,auto:true}); rest-=t;}}
+      if(rest>0){const l=arr[arr.length-1]; l.desp+=rest; l.envios.push({carga:r.carga,archivo:r.archivo,fecha:r.fecha,q:rest,auto:true});}
+    }
+  }
+  const Lall=[...lines.values()];
+  for(const l of Lall){l.ent=Math.min(l.desp,l.ocQ); l.sobre=Math.max(0,l.desp-l.ocQ); l.falta=l.ocQ-l.ent;}
+
+  // Notas de crédito por OC (las rechazadas no cuentan)
+  const ncPorOc=new Map();
+  for(const n of ncs){ if(!n.oc||n.estado==="Rechazada") continue; const k=n.cliente+"|"+n.oc; const x=ncPorOc.get(k)||{n:0,monto:0}; x.n++; x.monto+=n.monto||0; ncPorOc.set(k,x);}
+
+  // Órdenes de compra (historial completo, solo filtro de cliente)
+  const ocs=new Map();
+  for(const l of Lall){const k=l.cliente+"|"+l.oc; let o=ocs.get(k);
+    if(!o){const i=ocInfo.get(k); o={key:k,cliente:l.cliente,oc:l.oc,fecha:i.fecha,vence:i.vence,ocQ:0,ent:0,desp:0,sobre:0,montoOc:0,montoEnt:0,lineas:0,lineasOk:0,lineasCero:0,sinPrecio:0,envios:new Map(),L:[]};ocs.set(k,o);}
+    o.L.push(l); o.ocQ+=l.ocQ;o.ent+=l.ent;o.desp+=l.desp;o.sobre+=l.sobre;o.montoOc+=l.ocQ*l.precio;o.montoEnt+=l.ent*l.precio;o.lineas++;
+    if(!l.precio)o.sinPrecio++; if(l.desp>=l.ocQ)o.lineasOk++; if(l.desp===0)o.lineasCero++;
+    for(const e of l.envios){const x=o.envios.get(e.carga)||{carga:e.carga,archivo:e.archivo,fecha:e.fecha,q:0,monto:0,auto:false}; x.q+=e.q; x.monto+=e.q*l.precio; x.auto=x.auto||!!e.auto; o.envios.set(e.carga,x);}
+  }
+  const ocList=[...ocs.values()].map(o=>{
+    o.fr=o.ocQ?o.ent/o.ocQ:null; o.frL=o.lineas?o.lineasOk/o.lineas:null; o.cerrada=!!S.estadoOc[ocKey(o.cliente,o.oc)];
+    o.montoPend=o.montoOc-o.montoEnt; o.nc=ncPorOc.get(o.key)||{n:0,monto:0};
+    const vencida=o.vence&&o.vence<H;
+    o.estado=o.cerrada?"Cerrada":o.ent>=o.ocQ?"Completa":vencida?"Atrasada":o.desp===0?"Sin despacho":"Parcial";
+    o.ultimoDesp=[...o.envios.values()].reduce((m,e)=>e.fecha>m?e.fecha:m,"");
+    return o;
+  }).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||a.oc.localeCompare(b.oc));
+
+  // Líneas que entran a la medición
+  let L=Lall;
+  if(F.oc) L=L.filter(l=>l.cliente+"|"+l.oc===F.oc);
+  if(F.soloCerradas) L=L.filter(l=>S.estadoOc[ocKey(l.cliente,l.oc)]);
+  const pendientes=new Set(L.filter(l=>ocs.get(l.cliente+"|"+l.oc).desp===0).map(l=>l.cliente+"|"+l.oc));
+  L=L.filter(l=>!pendientes.has(l.cliente+"|"+l.oc));
+
+  const sug=new Map();
+  if(!F.oc && !F.soloCerradas) for(const r of filas.sug){ if(!inC(r)) continue; const k=r.sku+"|"+r.talla; sug.set(k,(sug.get(k)||0)+r.q); }
+
+  // Por SKU
+  const skus=new Map();
+  const getSku=s=>{let o=skus.get(s); if(!o){o={sku:s,desc:desc[s]||"",ocQ:0,ent:0,desp:0,sobre:0,sug:0,lineas:0,lineasOk:0,tallas:new Map()};skus.set(s,o);} return o;};
+  const getT=(o,t)=>{let x=o.tallas.get(t); if(!x){x={talla:t,ocQ:0,ent:0,desp:0,sug:0};o.tallas.set(t,x);} return x;};
+  for(const l of L){const o=getSku(l.sku),t=getT(o,l.talla);
+    o.ocQ+=l.ocQ;o.ent+=l.ent;o.desp+=l.desp;o.sobre+=l.sobre;o.lineas++; if(l.desp>=l.ocQ)o.lineasOk++;
+    t.ocQ+=l.ocQ;t.ent+=l.ent;t.desp+=l.desp;}
+  for(const [k,q] of sug){const [s,t]=k.split("|"); const o=getSku(s); o.sug+=q; getT(o,t).sug+=q;}
+  const skuList=[...skus.values()];
+  for(const o of skuList){
+    o.fr=o.ocQ?o.ent/o.ocQ:null; o.conv=o.sug?o.ocQ/o.sug:null; o.falta=o.ocQ-o.ent;
+    for(const t of o.tallas.values()) t.fr=t.ocQ?t.ent/t.ocQ:null;
+    o.tallasBajas=sortTallas([...o.tallas.values()].filter(t=>t.ocQ&&t.fr<u).map(t=>t.talla)).map(t=>o.tallas.get(t));
+    o.tallasCero=o.ent>0?o.tallasBajas.filter(t=>t.ent===0):[];
+  }
+
+  // Por talla
+  const tallas=new Map();
+  for(const l of L){let t=tallas.get(l.talla); if(!t){t={talla:l.talla,ocQ:0,ent:0,skus:new Set()};tallas.set(l.talla,t);} t.ocQ+=l.ocQ;t.ent+=l.ent; if(l.ent<l.ocQ*u) t.skus.add(l.sku);}
+  const tallaList=sortTallas([...tallas.keys()]).map(k=>{const t=tallas.get(k); t.fr=t.ocQ?t.ent/t.ocQ:null; t.falta=t.ocQ-t.ent; return t;});
+
+  // Totales
+  const T={ocQ:0,ent:0,desp:0,sobre:0,lineas:L.length,lineasOk:0,sug:0,ocConSug:0,montoOc:0,montoEnt:0};
+  for(const l of L){T.ocQ+=l.ocQ;T.ent+=l.ent;T.desp+=l.desp;T.sobre+=l.sobre;T.montoOc+=l.ocQ*l.precio;T.montoEnt+=l.ent*l.precio; if(l.desp>=l.ocQ)T.lineasOk++;}
+  for(const o of skuList){ if(o.sug){T.sug+=o.sug; T.ocConSug+=o.ocQ;} }
+  T.fr=T.ocQ?T.ent/T.ocQ:null; T.frL=T.lineas?T.lineasOk/T.lineas:null; T.conv=T.sug?T.ocConSug/T.sug:null; T.falta=T.ocQ-T.ent; T.montoPend=T.montoOc-T.montoEnt;
+
+  // Alertas
+  const A=[];
+  for(const o of skuList){ if(!o.ocQ) continue;
+    if(o.fr<u){
+      const tx=o.tallasBajas.map(t=>`${t.talla} ${pct(t.fr,0)}`).join(" · ");
+      A.push({sev:st(o.fr,u),tipo:"SKU bajo",titulo:o.sku+(o.desc?" · "+o.desc:""),texto:`Fill rate ${pct(o.fr)}. Tallas bajo umbral: ${tx||"—"}`+(o.tallasCero.length?`. Curva rota: ${o.tallasCero.map(t=>t.talla).join(", ")} sin despacho`:""),q:o.falta});
+    } else if(o.tallasCero.length){
+      A.push({sev:"warn",tipo:"Curva rota",titulo:o.sku+(o.desc?" · "+o.desc:""),texto:`SKU sobre umbral, pero ${o.tallasCero.map(t=>t.talla).join(", ")} no se despachó`,q:o.tallasCero.reduce((s,t)=>s+t.ocQ,0)});
+    }
+  }
+  for(const t of tallaList){ if(t.fr!=null&&t.fr<u) A.push({sev:st(t.fr,u),tipo:"Talla",titulo:"Talla "+t.talla,texto:`Fill rate ${pct(t.fr)} en ${t.skus.size} SKU${t.skus.size===1?"":"s"}`,q:t.falta}); }
+  const atrasadas=ocList.filter(o=>o.estado==="Atrasada"&&(!F.oc||o.key===F.oc));
+  if(atrasadas.length) A.push({sev:"crit",tipo:"OC atrasada",titulo:`${atrasadas.length} OC pasada${atrasadas.length>1?"s":""} de su fecha límite sin completar`,texto:atrasadas.slice(0,5).map(o=>`${o.oc} (${pct(o.fr,0)}, vencía ${fdate(o.vence)})`).join(" · "),q:atrasadas.reduce((s,o)=>s+o.ocQ-o.ent,0),ir:"ocs"});
+  const sobreSkus=skuList.filter(o=>o.sobre>0);
+  if(sobreSkus.length) A.push({sev:"info",tipo:"Sobre-despacho",titulo:`${sobreSkus.length} SKU con más unidades que la OC`,texto:sobreSkus.slice(0,6).map(o=>`${o.sku} +${fmtN(o.sobre)}`).join(" · "),q:0});
+  if(sinOc.length){const q=sinOc.reduce((s,r)=>s+r.q,0); A.push({sev:"info",tipo:"Despacho sin cruce",titulo:`${fmtN(q)} uds despachadas no calzan con una OC`,texto:[...new Set(sinOc.map(r=>r.motivo))].join(" · ")+". Revisa el N° de OC o el SKU en el archivo de despacho.",q:0});}
+  if(pendientes.size) A.push({sev:"info",tipo:"Sin despacho aún",titulo:`${pendientes.size} OC sin ningún despacho cargado`,texto:[...pendientes].slice(0,6).map(k=>k.split("|")[1]).join(" · ")+". No entran al fill rate hasta que subas su primer despacho.",q:0});
+  const rank={crit:0,warn:1,info:2};
+  A.sort((a,b)=>rank[a.sev]-rank[b.sev]||b.q-a.q);
+  return {u,L,Lall,skuList,tallaList,ocList,ocs,T,A,sinOc,pendientes,filas,desc,cargas,ncs,pr};
+}
+
+/* ---------- Sugeridos: cada sugerido contra las OCs que vinieron después ---------- */
+function sugeridos(){
+  const {filas,cargas,desc,pr}=R, F=S.filtros;
+  const sc=cargas.filter(c=>c.tipo==="sugerido");
+  const fechasPorCliente=new Map();
+  for(const r of filas.sug){const a=fechasPorCliente.get(r.cliente)||new Set(); a.add(r.fecha); fechasPorCliente.set(r.cliente,a);}
+  const out=[];
+  for(const c of sc){
+    const rows=filas.sug.filter(r=>r.carga===c.id&&(!F.cliente||r.cliente===F.cliente)); if(!rows.length) continue;
+    const clientes=[...new Set(rows.map(r=>r.cliente))];
+    const ventana=cl=>{const fs=[...(fechasPorCliente.get(cl)||[])].filter(f=>f>c.fecha).sort(); return [c.fecha,fs[0]||"9999"];};
+    const lines=new Map(), ocsSet=new Set();
+    for(const r of rows){const k=r.cliente+"|"+r.sku+"|"+r.talla; const l=lines.get(k)||{cliente:r.cliente,sku:r.sku,talla:r.talla,sug:0,oc:0,precio:pr(r.sku,r.talla,r.precio)}; l.sug+=r.q; lines.set(k,l);}
+    let fuera=0;
+    for(const cl of clientes){const [d,h]=ventana(cl);
+      for(const r of filas.oc){ if(r.cliente!==cl||r.fecha<d||r.fecha>=h) continue; ocsSet.add(r.oc);
+        const l=lines.get(cl+"|"+r.sku+"|"+r.talla); if(l) l.oc+=r.q; else fuera+=r.q; }}
+    const L=[...lines.values()];
+    const sug=L.reduce((s,l)=>s+l.sug,0), oc=L.reduce((s,l)=>s+Math.min(l.oc,l.sug),0), ocTot=L.reduce((s,l)=>s+l.oc,0);
+    const skus=new Map(); for(const l of L){const o=skus.get(l.sku)||{sku:l.sku,desc:desc[l.sku]||"",sug:0,oc:0,tallas:[]}; o.sug+=l.sug;o.oc+=l.oc;o.tallas.push(l); skus.set(l.sku,o);}
+    const sk=[...skus.values()];
+    out.push({c,clientes,L,sk,ocs:[...ocsSet],sug,ocTot,fuera,conv:sug?oc/sug:null,monto:L.reduce((s,l)=>s+l.sug*l.precio,0),
+      noComprados:sk.filter(o=>o.oc===0).length,nSkus:sk.length});
+  }
+  return out.sort((a,b)=>String(b.c.fecha).localeCompare(String(a.c.fecha)));
+}
+
+/* ---------- Render ---------- */
+let R=null;
+const TABS=[["resumen","Resumen"],["ocs","Órdenes de compra"],["sugeridos","Sugeridos"],["sku","Por SKU"],["talla","Por talla"],["nc","Notas de crédito"],["cargas","Cargas"]];
+function render(){
+  R=calcular();
+  renderBanner(); renderFiltros(); renderTabs();
+  const v=$("#view"), V={resumen:vResumen,ocs:vOcs,sugeridos:vSugeridos,sku:vSku,talla:vTalla,nc:vNc,cargas:vCargas}[S.tab]||vResumen;
+  v.innerHTML=V();
+  $("#btnExport").hidden=!S.downloads||!R.Lall.length;
+}
+function renderBanner(){
+  let h="";
+  if(esDemo()) h+=`<div class="banner"><b>Datos de ejemplo.</b> Clientes, OCs, precios y notas de crédito inventados para mostrar cómo funciona. Desaparecen cuando subes tu primer archivo en <b>Cargas</b>.</div>`;
+  if(S.errDb) h+=`<div class="banner" style="margin-top:8px"><b>Algo falló.</b> ${esc(S.errDb)}</div>`;
+  if(S.rol==="lector") h+=`<div class="banner" style="margin-top:8px"><b>Acceso de solo lectura.</b> Puedes revisar todo, pero no subir archivos ni cambiar estados.</div>`;
+  $("#banner").innerHTML=h;
+}
+function clientesConocidos(){const {filas}=fuente(); return [...new Set([...filas.oc,...filas.sug,...filas.desp].map(r=>r.cliente))].filter(Boolean).sort();}
+function renderFiltros(){
+  const {filas}=fuente(); const clientes=clientesConocidos();
+  if(S.filtros.cliente&&!clientes.includes(S.filtros.cliente)) S.filtros.cliente="";
+  $("#fCliente").innerHTML=`<option value="">Todos los clientes</option>`+clientes.map(c=>`<option ${c===S.filtros.cliente?"selected":""}>${esc(c)}</option>`).join("");
+  const ocs=[...new Set(filas.oc.filter(r=>!S.filtros.cliente||r.cliente===S.filtros.cliente).map(r=>r.cliente+"|"+r.oc))].sort();
+  if(S.filtros.oc&&!ocs.includes(S.filtros.oc)) S.filtros.oc="";
+  $("#fOc").innerHTML=`<option value="">Todas las OCs</option>`+ocs.map(k=>{const [c,o]=k.split("|");return `<option value="${esc(k)}" ${k===S.filtros.oc?"selected":""}>${esc(o)}${S.filtros.cliente?"":" · "+esc(c)}</option>`;}).join("");
+  if(document.activeElement!==$("#fUmbral")) $("#fUmbral").value=S.config.umbral;
+  $("#fCerradas").checked=S.filtros.soloCerradas;
+  $("#fQ").placeholder=S.tab==="ocs"||S.tab==="nc"?"N° de OC, NC o cliente":"SKU o descripción";
+}
+function renderTabs(){
+  const nAl=R.A.filter(a=>a.sev!=="info").length, nNc=R.ncs.filter(n=>n.estado==="Solicitada"||n.estado==="En revisión").length;
+  const badge={resumen:nAl,nc:nNc};
+  $("#tabs").innerHTML=TABS.map(([k,n])=>`<button class="tab" role="tab" data-tab="${k}" aria-selected="${S.tab===k}">${n}${badge[k]?`<span class="count">${badge[k]}</span>`:""}</button>`).join("");
+}
+const frBar=(fr,u)=>`<div class="frcell"><span class="num">${pct(fr)}</span><span class="bar"><i class="bg-${st(fr,u)}" style="width:${Math.min(100,(fr||0)*100)}%"></i></span></div>`;
+const sevLbl={crit:"Crítico",warn:"Bajo",info:"Revisar",ok:"OK"};
+const EST_OC={"Completa":"ok","Parcial":"warn","Atrasada":"crit","Sin despacho":"info","Cerrada":"neutral"};
+const estOc=e=>`<span class="sev ${EST_OC[e]}">${esc(e)}</span>`;
+const NC_EST=["Solicitada","En revisión","Aprobada","Emitida","Aplicada","Rechazada"];
+const NC_CLS={"Solicitada":"info","En revisión":"warn","Aprobada":"info","Emitida":"ok","Aplicada":"ok","Rechazada":"neutral"};
+const NC_MOT=["Devolución","Diferencia de precio","Faltante facturado","Producto dañado o con falla","Descuento comercial","Error de facturación","Otro"];
+const qmatch=(...xs)=>{const q=S.filtros.q.trim().toUpperCase(); return !q||xs.some(x=>String(x||"").toUpperCase().includes(q));};
+
+function vResumen(){
+  const {T,A,u,skuList}=R;
+  if(!R.L.length) return `<div class="panel empty">${R.pendientes.size?`Hay ${R.pendientes.size} OC cargada${R.pendientes.size>1?"s":""} sin despacho. Sube el archivo de despacho en <b>Cargas</b> para medir el fill rate.`:`No hay órdenes de compra para este filtro. Sube una OC en <b>Cargas</b> para empezar a medir.`}</div>`;
+  const kp=(lbl,v,cls,d)=>`<div class="kpi"><span class="label">${lbl}</span><span class="v ${cls}">${v}</span><span class="d">${d}</span></div>`;
+  const al=S.verTodas?A:A.slice(0,10);
+  const worst=skuList.filter(o=>o.ocQ).sort((a,b)=>a.fr-b.fr||b.falta-a.falta).slice(0,8);
+  return `<div style="display:grid;gap:16px">
+  <div class="kpis">
+    ${kp("Fill rate unidades",pct(T.fr),st(T.fr,u),`${fmtN(T.ent)} de ${fmtN(T.ocQ)} uds pedidas`)}
+    ${kp("Fill rate líneas",pct(T.frL),st(T.frL,u),`${fmtN(T.lineasOk)} de ${fmtN(T.lineas)} SKU-talla completas`)}
+    ${kp("Pendiente de despacho",T.montoOc?fmt$(T.montoPend):fmtN(T.falta),T.falta?"warn":"ok",`${fmtN(T.falta)} uds${T.montoOc?" a precio de OC":""}${T.sobre?` · ${fmtN(T.sobre)} uds sobre la OC`:""}`)}
+    ${kp("Sugerido → OC",pct(T.conv),"",T.sug?`El cliente pidió ${fmtN(T.ocConSug)} de ${fmtN(T.sug)} uds sugeridas`:"Sin sugeridos para este filtro")}
+  </div>
+  <div class="grid2">
+    <section class="panel">
+      <div class="panel-h"><h2>Alertas</h2><span class="muted small">${A.length} en total · umbral ${S.config.umbral}%</span></div>
+      ${A.length?`<div class="alerts">${al.map(a=>`<div class="alert"><span class="sev ${a.sev}">${sevLbl[a.sev]}</span><div style="min-width:0"><div class="t">${esc(a.tipo)} · ${esc(a.titulo)}</div><div class="x">${esc(a.texto)}</div></div><span class="q">${a.q>0?"−"+fmtN(a.q)+" uds":""}</span></div>`).join("")}</div>
+      ${A.length>10?`<button class="btn" data-act="vertodas">${S.verTodas?"Ver menos":"Ver las "+A.length+" alertas"}</button>`:""}`:`<div class="msg ok">Todo sobre el umbral. No hay SKUs ni tallas en falla.</div>`}
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h2>Fill rate por talla</h2><span class="muted small">La línea punteada es tu umbral</span></div>
+      ${chartTallas()}
+      <div class="legend"><span><i class="sw bg-ok"></i>Sobre umbral</span><span><i class="sw bg-warn"></i>Hasta 15 pts bajo</span><span><i class="sw bg-crit"></i>Más de 15 pts bajo</span></div>
+    </section>
+  </div>
+  <section class="panel">
+    <div class="panel-h"><h2>SKUs con menor fill rate</h2><button class="btn" data-tab="sku">Ver todos los SKUs</button></div>
+    <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th class="r">OC</th><th class="r">Despachado</th><th class="r">Fill rate</th><th>Tallas en falla</th></tr></thead><tbody>
+    ${worst.map(o=>`<tr><td class="mono">${esc(o.sku)}</td><td>${esc(o.desc)}</td><td class="num r">${fmtN(o.ocQ)}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${frBar(o.fr,u)}</td><td><div class="chips">${o.tallasBajas.map(t=>`<span class="chip ${st(t.fr,u)}">${esc(t.talla)} ${pct(t.fr,0)}</span>`).join("")||'<span class="muted small">ninguna</span>'}</div></td></tr>`).join("")}
+    </tbody></table></div>
+  </section></div>`;
+}
+
+function chartTallas(){
+  const {tallaList,u}=R; const d=tallaList.filter(t=>t.ocQ);
+  if(!d.length) return `<div class="empty">Sin datos</div>`;
+  const W=Math.max(320,d.length*44+50),H=230,pl=38,pr=8,pt=22,pb=34,iw=W-pl-pr,ih=H-pt-pb;
+  const bw=Math.min(30,iw/d.length-6), y=v=>pt+ih-(v*ih);
+  let g="";
+  [0,.25,.5,.75,1].forEach(v=>{g+=`<line class="grid" x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end">${v*100}%</text>`;});
+  const many=d.length>12;
+  d.forEach((t,i)=>{
+    const cx=pl+(i+.5)*(iw/d.length), h=Math.max(1,t.fr*ih), s=st(t.fr,u);
+    const tip=`Talla ${t.talla}\nFill rate ${pct(t.fr)}\n${fmtN(t.ent)} de ${fmtN(t.ocQ)} uds\n${t.skus.size} SKU bajo umbral`;
+    g+=`<g data-tip="${esc(tip)}"><rect x="${cx-iw/d.length/2}" y="${pt}" width="${iw/d.length}" height="${ih}" fill="transparent"/>
+      <path d="M${cx-bw/2},${y(0)} V${y(0)-h+4} q0,-4 4,-4 h${bw-8} q4,0 4,4 V${y(0)} Z" style="fill:var(--${s})"/>
+      ${!many||s!=="ok"?`<text class="lbl" x="${cx}" y="${y(0)-h-6}" text-anchor="middle">${Math.round(t.fr*100)}</text>`:""}
+      <text x="${cx}" y="${H-pb+16}" text-anchor="middle" style="font-weight:500">${esc(t.talla)}</text></g>`;
+  });
+  g+=`<line class="thr" x1="${pl}" x2="${W-pr}" y1="${y(u)}" y2="${y(u)}"/>`;
+  return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W,520)}px;max-width:${W}px;display:block" role="img" aria-label="Fill rate por talla">${g}</svg></div>`;
+}
+
+function vSku(){
+  const {skuList,u}=R;
+  let list=skuList.filter(o=>qmatch(o.sku,o.desc));
+  const {k,dir}=S.sort;
+  list.sort((a,b)=>{const A=a[k],B=b[k]; if(A==null&&B==null)return 0; if(A==null)return 1; if(B==null)return -1; return (typeof A==="string"?A.localeCompare(B):A-B)*dir;});
+  const th=(key,l,r)=>`<th class="sort ${r?"r":""}" data-sort="${key}">${l}${k===key?(dir===1?" ↑":" ↓"):""}</th>`;
+  if(!list.length) return `<div class="panel empty">Ningún SKU coincide con el filtro.</div>`;
+  return `<div style="display:grid;gap:10px"><p class="how">Haz clic en un SKU para ver su curva de tallas. <b>Fill rate</b> = unidades despachadas ÷ unidades de la OC, sin contar sobre-despacho (lo que se manda de más en una talla no compensa la que falta).</p>
+  <div class="tablewrap"><table><thead><tr>${th("sku","SKU")}${th("desc","Descripción")}${th("sug","Sugerido",1)}${th("ocQ","OC",1)}${th("conv","OC/Sug.",1)}${th("ent","Despachado",1)}${th("falta","Faltan",1)}${th("fr","Fill rate",1)}<th>Tallas en falla</th></tr></thead><tbody>
+  ${list.map(o=>{const op=S.abiertos.has(o.sku);
+    return `<tr class="row" data-sku="${esc(o.sku)}" aria-expanded="${op}"><td class="mono">${op?"▾":"▸"} ${esc(o.sku)}</td><td>${esc(o.desc)}</td><td class="num r">${o.sug?fmtN(o.sug):"—"}</td><td class="num r">${fmtN(o.ocQ)}</td><td class="num r">${pct(o.conv,0)}</td><td class="num r">${fmtN(o.ent)}${o.sobre?` <span class="muted">(+${fmtN(o.sobre)})</span>`:""}</td><td class="num r">${o.ocQ?fmtN(o.falta):"—"}</td><td class="r">${o.ocQ?frBar(o.fr,u):'<span class="muted small">no pedido</span>'}</td>
+    <td><div class="chips">${o.tallasBajas.map(t=>`<span class="chip ${st(t.fr,u)}">${esc(t.talla)} ${pct(t.fr,0)}</span>`).join("")}</div></td></tr>
+    ${op?`<tr class="detail"><td colspan="9"><div class="curve">${sortTallas([...o.tallas.keys()]).map(tk=>{const t=o.tallas.get(tk),s=st(t.fr,u);
+      return `<div class="cv ${s}"><span class="tl">${esc(t.talla)}</span><span class="muted">Sug ${t.sug?fmtN(t.sug):"—"}</span><span class="muted">OC ${fmtN(t.ocQ)}</span><span class="muted">Desp ${fmtN(t.desp)}</span><span class="fr" style="color:var(--${s==="na"?"muted":s})">${pct(t.fr,0)}</span></div>`;}).join("")}</div></td></tr>`:""}`;}).join("")}
+  </tbody></table></div></div>`;
+}
+
+function vTalla(){
+  const {tallaList,skuList,u}=R;
+  if(!tallaList.length) return `<div class="panel empty">No hay órdenes de compra con despacho para este filtro.</div>`;
+  const cols=tallaList.map(t=>t.talla);
+  const rows=skuList.filter(o=>o.ocQ&&qmatch(o.sku,o.desc)).sort((a,b)=>a.fr-b.fr).slice(0,60);
+  return `<div style="display:grid;gap:16px">
+  <section class="panel"><div class="panel-h"><h2>Fill rate por talla</h2></div>${chartTallas()}
+  <div class="tablewrap"><table><thead><tr><th>Talla</th><th class="r">OC</th><th class="r">Despachado</th><th class="r">Faltan</th><th class="r">Fill rate</th><th class="r">SKUs bajo umbral</th></tr></thead><tbody>
+  ${tallaList.map(t=>`<tr><td class="mono"><b>${esc(t.talla)}</b></td><td class="num r">${fmtN(t.ocQ)}</td><td class="num r">${fmtN(t.ent)}</td><td class="num r">${fmtN(t.falta)}</td><td class="r">${frBar(t.fr,u)}</td><td class="num r">${t.skus.size}</td></tr>`).join("")}
+  </tbody></table></div></section>
+  <section class="panel"><div class="panel-h"><h2>Mapa SKU × talla</h2><span class="muted small">${rows.length} SKUs, ordenados de peor a mejor${rows.length===60?" (primeros 60)":""}</span></div>
+  <div class="legend"><span><i class="sw" style="background:var(--ok-bg);border:1px solid var(--ok)"></i>Sobre umbral</span><span><i class="sw" style="background:var(--warn-bg);border:1px solid var(--warn)"></i>Hasta 15 pts bajo</span><span><i class="sw" style="background:var(--crit-bg);border:1px solid var(--crit)"></i>Más de 15 pts bajo</span><span>Vacío = talla no pedida</span></div>
+  <div class="tablewrap heat"><table><thead><tr><th>SKU</th><th class="r">Total</th>${cols.map(c=>`<th class="r" style="text-align:center">${esc(c)}</th>`).join("")}</tr></thead><tbody>
+  ${rows.map(o=>`<tr><td class="mono" title="${esc(o.desc)}">${esc(o.sku)}</td><td class="num r">${pct(o.fr,0)}</td>${cols.map(c=>{const t=o.tallas.get(c); if(!t||!t.ocQ) return `<td class="c"></td>`;
+    return `<td class="c ${st(t.fr,u)}" data-tip="${esc(`${o.sku} · talla ${c}\nOC ${fmtN(t.ocQ)} · despachado ${fmtN(t.desp)}\nFill rate ${pct(t.fr)}`)}">${Math.round(t.fr*100)}</td>`;}).join("")}</tr>`).join("")}
+  </tbody></table></div></section></div>`;
+}
+
+/* ---------- Órdenes de compra ---------- */
+function vOcs(){
+  if(S.det.ocs&&R.ocs.has(S.det.ocs)) return vOcDetalle(R.ocs.get(S.det.ocs));
+  S.det.ocs=null;
+  const {ocList,u}=R;
+  if(!ocList.length) return `<div class="panel empty">Todavía no hay órdenes de compra. Súbelas en <b>Cargas</b>.</div>`;
+  const cnt={}; for(const o of ocList) cnt[o.estado]=(cnt[o.estado]||0)+1;
+  const list=ocList.filter(o=>(!S.ocEstado||o.estado===S.ocEstado)&&qmatch(o.oc,o.cliente));
+  const tot=list.reduce((a,o)=>(a.oc+=o.montoOc,a.ent+=o.montoEnt,a.nc+=o.nc.monto,a),{oc:0,ent:0,nc:0});
+  return `<div style="display:grid;gap:12px">
+  <div class="fchips" role="group" aria-label="Estado">${["","Sin despacho","Parcial","Atrasada","Completa","Cerrada"].map(e=>`<button class="fchip" data-ocest="${e}" aria-pressed="${S.ocEstado===e}">${e||"Todas"} <span class="num">${e?cnt[e]||0:ocList.length}</span></button>`).join("")}</div>
+  <div class="kpis">
+    <div class="kpi"><span class="label">Monto en OCs</span><span class="v">${fmt$(tot.oc)}</span><span class="d">${list.length} órdenes, a precio de OC</span></div>
+    <div class="kpi"><span class="label">Despachado</span><span class="v">${fmt$(tot.ent)}</span><span class="d">${pct(tot.oc?tot.ent/tot.oc:null)} del monto</span></div>
+    <div class="kpi"><span class="label">Pendiente</span><span class="v ${tot.oc-tot.ent>0?"warn":"ok"}">${fmt$(tot.oc-tot.ent)}</span><span class="d">por despachar o por cortar</span></div>
+    <div class="kpi"><span class="label">Notas de crédito</span><span class="v">${fmt$(tot.nc)}</span><span class="d">asociadas a estas OCs, sin rechazadas</span></div>
+  </div>
+  ${list.length?`<div class="tablewrap"><table><thead><tr><th>OC</th><th>Cliente</th><th>Emisión</th><th>Fecha límite</th><th class="r">Uds</th><th class="r">Monto OC</th><th class="r">Fill rate</th><th class="r">Pendiente</th><th>Último despacho</th><th class="r">NC</th><th>Estado</th></tr></thead><tbody>
+  ${list.map(o=>`<tr class="row" data-oc="${esc(o.key)}"><td class="mono"><b>${esc(o.oc)}</b></td><td>${esc(o.cliente)}</td><td class="mono">${fdate(o.fecha)}</td><td class="mono">${fdate(o.vence)}</td><td class="num r">${fmtN(o.ocQ)}</td><td class="num r">${o.montoOc?fmt$(o.montoOc):"—"}</td><td class="r">${o.desp?frBar(o.fr,u):'<span class="muted">—</span>'}</td><td class="num r">${o.montoOc?fmt$(o.montoPend):fmtN(o.ocQ-o.ent)+" uds"}</td><td class="mono">${fdate(o.ultimoDesp)}</td><td class="num r">${o.nc.n?fmt$(o.nc.monto):"—"}</td><td>${estOc(o.estado)}</td></tr>`).join("")}
+  </tbody></table></div>`:`<div class="panel empty">Ninguna OC con ese estado o búsqueda.</div>`}
+  <p class="how"><b>Estados:</b> Sin despacho, Parcial y Completa se calculan solos con los despachos que subes. <b>Atrasada</b> = pasó la fecha límite y no está completa. <b>Cerrada</b> la marcas tú cuando ya no vendrán más despachos. Desde ese momento lo que faltó cuenta como corte definitivo.</p>
+  ${R.sinOc.length?`<section class="panel"><h3>Despachos que no calzan con una OC</h3><div class="tablewrap"><table><thead><tr><th>Cliente</th><th>OC en el despacho</th><th>SKU</th><th>Talla</th><th class="r">Uds</th><th>Archivo</th><th>Motivo</th></tr></thead><tbody>
+  ${R.sinOc.slice(0,200).map(r=>`<tr><td>${esc(r.cliente)}</td><td class="mono">${esc(r.oc||"—")}</td><td class="mono">${esc(r.sku)}</td><td class="mono">${esc(r.talla)}</td><td class="num r">${fmtN(r.q)}</td><td class="small">${esc(r.archivo)}</td><td>${esc(r.motivo)}</td></tr>`).join("")}</tbody></table></div></section>`:""}
+  </div>`;
+}
+function vOcDetalle(o){
+  const {u,desc,ncs}=R;
+  const L=o.L.filter(l=>(!S.ocSoloPend||l.ent<l.ocQ)&&qmatch(l.sku,desc[l.sku])).sort((a,b)=>a.sku.localeCompare(b.sku)||(()=>{const A=tallaRank(a.talla),B=tallaRank(b.talla);return A[0]-B[0]||A[1]-B[1]||A[2].localeCompare(B[2]);})());
+  const envs=[...o.envios.values()].sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+  const ncOc=ncs.filter(n=>n.cliente===o.cliente&&n.oc===o.oc);
+  const est=l=>l.desp===0?["Pendiente","info"]:l.desp>l.ocQ?["Sobre OC","info"]:l.ent>=l.ocQ?["Completa","ok"]:["Parcial","warn"];
+  return `<div style="display:grid;gap:16px">
+  <div><button class="btn" data-act="volver-oc">← Todas las OCs</button></div>
+  <section class="panel">
+    <div class="dh"><div><div class="label">Orden de compra · ${esc(o.cliente)}</div><h2 style="font-size:30px">${esc(o.oc)}</h2>
+      <div class="muted small">Emitida ${fdate(o.fecha)} · Fecha límite ${fdate(o.vence)} · ${o.lineas} líneas SKU-talla</div></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${estOc(o.estado)}
+        <label class="check" style="padding:0"><input type="checkbox" data-cerrar="${esc(o.key)}" ${o.cerrada?"checked":""}> OC cerrada</label>
+        <button class="btn" data-act="nc-desde-oc" data-k="${esc(o.key)}" ${esDemo()?"disabled title=\"Sube tus OCs para crear notas de crédito\"":""}>Crear nota de crédito</button></div></div>
+    <div class="kpis">
+      <div class="kpi"><span class="label">Monto OC</span><span class="v">${o.montoOc?fmt$(o.montoOc):"—"}</span><span class="d">${fmtN(o.ocQ)} uds${o.sinPrecio?` · ${o.sinPrecio} líneas sin precio`:""}</span></div>
+      <div class="kpi"><span class="label">Despachado</span><span class="v">${o.montoOc?fmt$(o.montoEnt):fmtN(o.ent)+" uds"}</span><span class="d">${fmtN(o.ent)} uds en ${envs.length} despacho${envs.length===1?"":"s"}${o.sobre?` · +${fmtN(o.sobre)} sobre OC`:""}</span></div>
+      <div class="kpi"><span class="label">Fill rate</span><span class="v ${o.desp?st(o.fr,u):""}">${o.desp?pct(o.fr):"—"}</span><span class="d">Líneas completas ${pct(o.frL)} · ${o.lineasCero} en cero</span></div>
+      <div class="kpi"><span class="label">Notas de crédito</span><span class="v">${o.nc.n?fmt$(o.nc.monto):"—"}</span><span class="d">${o.nc.n} asociada${o.nc.n===1?"":"s"}${o.montoEnt&&o.nc.monto?` · ${pct(o.nc.monto/o.montoEnt)} de lo despachado`:""}</span></div>
+    </div>
+  </section>
+  <section class="panel"><div class="panel-h"><h2>Despachos</h2><span class="muted small">${envs.length?`Último: ${fdate(o.ultimoDesp)}`:"Sin despachos todavía"}</span></div>
+    ${envs.length?`<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Archivo</th><th class="r">Uds</th><th class="r">Monto</th><th>Cruce</th></tr></thead><tbody>
+    ${envs.map(e=>`<tr><td class="mono">${fdate(e.fecha)}</td><td>${esc(e.archivo)}</td><td class="num r">${fmtN(e.q)}</td><td class="num r">${e.monto?fmt$(e.monto):"—"}</td><td class="small muted">${e.auto?"Asignado por SKU-talla (el despacho no traía OC)":"Por N° de OC"}</td></tr>`).join("")}
+    </tbody></table></div>`:""}
+  </section>
+  <section class="panel"><div class="panel-h"><h2>Detalle por SKU y talla</h2><label class="check" style="padding:0"><input type="checkbox" id="ocSoloPend" ${S.ocSoloPend?"checked":""}> Solo líneas con faltante</label></div>
+    <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th>Talla</th><th class="r">Precio</th><th class="r">Uds OC</th><th class="r">Despachado</th><th class="r">Faltan</th><th class="r">Monto pendiente</th><th>Estado</th></tr></thead><tbody>
+    ${L.map(l=>{const [e,c]=est(l); return `<tr><td class="mono">${esc(l.sku)}</td><td>${esc(desc[l.sku]||"")}</td><td class="mono"><b>${esc(l.talla)}</b></td><td class="num r">${l.precio?fmt$(l.precio):"—"}</td><td class="num r">${fmtN(l.ocQ)}</td><td class="num r">${fmtN(l.desp)}</td><td class="num r">${l.falta?fmtN(l.falta):""}</td><td class="num r">${l.falta&&l.precio?fmt$(l.falta*l.precio):""}</td><td><span class="sev ${c}">${e}</span></td></tr>`;}).join("")||`<tr><td colspan="9" class="empty">Sin líneas para mostrar.</td></tr>`}
+    </tbody></table></div>
+  </section>
+  <section class="panel"><div class="panel-h"><h2>Notas de crédito de esta OC</h2></div>
+    ${ncOc.length?ncTable(ncOc):`<div class="muted small">Ninguna.</div>`}
+  </section></div>`;
+}
+
+/* ---------- Sugeridos ---------- */
+function vSugeridos(){
+  const list=sugeridos().filter(s=>qmatch(s.c.archivo,...s.clientes));
+  if(S.det.sugeridos){const s=list.find(x=>x.c.id===S.det.sugeridos); if(s) return vSugDetalle(s); S.det.sugeridos=null;}
+  if(!list.length) return `<div class="panel empty">Todavía no hay sugeridos. Súbelos en <b>Cargas</b> como tipo “Sugerido”.</div>`;
+  return `<div style="display:grid;gap:12px">
+  <p class="how">Cada sugerido se compara con las OCs que el mismo cliente emitió <b>desde la fecha del sugerido hasta el siguiente sugerido</b>. Así ves qué parte de tu recomendación compró y qué dejó fuera.</p>
+  <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Archivo</th><th class="r">SKUs</th><th class="r">Uds sugeridas</th><th class="r">Monto sugerido</th><th class="r">OCs después</th><th class="r">Conversión</th><th class="r">SKUs no comprados</th></tr></thead><tbody>
+  ${list.map(s=>`<tr class="row" data-sug="${esc(s.c.id)}"><td class="mono">${fdate(s.c.fecha)}</td><td>${esc(s.clientes.join(", "))}</td><td>${esc(s.c.archivo)}</td><td class="num r">${s.nSkus}</td><td class="num r">${fmtN(s.sug)}</td><td class="num r">${s.monto?fmt$(s.monto):"—"}</td><td class="num r">${s.ocs.length}</td><td class="r">${s.ocs.length?frBar(s.conv,.8):'<span class="muted small">sin OC aún</span>'}</td><td class="num r">${s.ocs.length?s.noComprados:"—"}</td></tr>`).join("")}
+  </tbody></table></div></div>`;
+}
+function vSugDetalle(s){
+  const sk=s.sk.slice().sort((a,b)=>(a.sug?a.oc/a.sug:0)-(b.sug?b.oc/b.sug:0));
+  return `<div style="display:grid;gap:16px">
+  <div><button class="btn" data-act="volver-sug">← Todos los sugeridos</button></div>
+  <section class="panel">
+    <div><div class="label">Sugerido · ${esc(s.clientes.join(", "))}</div><h2 style="font-size:28px">${esc(s.c.archivo||"Sugerido")}</h2><div class="muted small">Enviado ${fdate(s.c.fecha)} · OCs que lo siguieron: ${s.ocs.length?esc(s.ocs.join(", ")):"ninguna todavía"}</div></div>
+    <div class="kpis">
+      <div class="kpi"><span class="label">Sugerido</span><span class="v">${fmtN(s.sug)}</span><span class="d">uds${s.monto?" · "+fmt$(s.monto):""}</span></div>
+      <div class="kpi"><span class="label">Comprado del sugerido</span><span class="v">${pct(s.conv)}</span><span class="d">${s.nSkus-s.noComprados} de ${s.nSkus} SKUs con OC</span></div>
+      <div class="kpi"><span class="label">Comprado fuera del sugerido</span><span class="v">${fmtN(s.fuera)}</span><span class="d">uds de SKU-tallas que no sugeriste</span></div>
+    </div>
+  </section>
+  <section class="panel"><h2>Por SKU</h2>
+    <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th class="r">Sugerido</th><th class="r">En OC</th><th class="r">Conversión</th><th>Tallas (sugerido → OC)</th></tr></thead><tbody>
+    ${sk.map(o=>`<tr><td class="mono">${esc(o.sku)}</td><td>${esc(o.desc)}</td><td class="num r">${fmtN(o.sug)}</td><td class="num r">${fmtN(o.oc)}</td><td class="num r">${pct(o.sug?o.oc/o.sug:null,0)}</td><td><div class="chips">${sortTallas(o.tallas.map(t=>t.talla)).map(tk=>{const t=o.tallas.find(x=>x.talla===tk); const r=t.sug?t.oc/t.sug:0; return `<span class="chip ${r>=.8?"ok":r>=.5?"warn":"crit"}">${esc(tk)} ${fmtN(t.sug)}→${fmtN(t.oc)}</span>`;}).join("")}</div></td></tr>`).join("")}
+    </tbody></table></div>
+  </section></div>`;
+}
+
+/* ---------- Notas de crédito ---------- */
+function ncTable(list){
+  return `<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>N° NC</th><th>Cliente</th><th>OC</th><th>Motivo</th><th class="r">Monto</th><th>Estado</th><th></th></tr></thead><tbody>
+  ${list.map(n=>`<tr><td class="mono">${fdate(n.fecha)}</td><td class="mono">${esc(n.numero||"—")}</td><td>${esc(n.cliente)}</td><td class="mono">${n.oc?`<a href="#" data-oc-link="${esc(n.cliente+"|"+n.oc)}">${esc(n.oc)}</a>`:"—"}</td><td>${esc(n.motivo)}${n.notas?`<div class="small muted" style="white-space:normal;max-width:36ch">${esc(n.notas)}</div>`:""}</td><td class="num r">${fmt$(n.monto)}</td>
+    <td><select class="estsel ${NC_CLS[n.estado]}" data-ncest="${esc(n.id)}" aria-label="Estado de la nota" ${esDemo()&&String(n.id).startsWith("demo")?"disabled":""}>${NC_EST.map(e=>`<option ${e===n.estado?"selected":""}>${e}</option>`).join("")}</select></td>
+    <td style="white-space:nowrap">${String(n.id).startsWith("demo")?"":`<button class="btn small-btn" data-act="nc-editar" data-id="${esc(n.id)}">Editar</button> <button class="btn small-btn danger ${S.armado===n.id?"armed":""}" data-ncdel="${esc(n.id)}">${S.armado===n.id?"Confirmar":"Eliminar"}</button>`}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+function vNc(){
+  const {ncs}=R; const F=S.filtros;
+  const base=ncs.filter(n=>(!F.cliente||n.cliente===F.cliente)&&qmatch(n.numero,n.oc,n.cliente,n.motivo));
+  const list=base.filter(n=>!S.ncEstado||n.estado===S.ncEstado).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+  const sum=e=>base.filter(n=>e.includes(n.estado)).reduce((s,n)=>s+(n.monto||0),0);
+  const cnt={}; for(const n of base) cnt[n.estado]=(cnt[n.estado]||0)+1;
+  return `<div style="display:grid;gap:16px">
+  ${S.ncForm?ncFormView():`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="nc-nueva" ${esDemo()?"disabled":""}>Nueva nota de crédito</button>${esDemo()?'<span class="muted small">Sube tus OCs para empezar a registrar notas de crédito. Las de abajo son de ejemplo.</span>':""}</div>`}
+  <div class="kpis">
+    <div class="kpi"><span class="label">Por resolver</span><span class="v warn">${fmt$(sum(["Solicitada","En revisión"]))}</span><span class="d">${(cnt["Solicitada"]||0)+(cnt["En revisión"]||0)} solicitadas o en revisión</span></div>
+    <div class="kpi"><span class="label">Aprobadas sin emitir</span><span class="v">${fmt$(sum(["Aprobada"]))}</span><span class="d">${cnt["Aprobada"]||0} notas</span></div>
+    <div class="kpi"><span class="label">Emitidas sin aplicar</span><span class="v">${fmt$(sum(["Emitida"]))}</span><span class="d">${cnt["Emitida"]||0} notas</span></div>
+    <div class="kpi"><span class="label">Aplicadas</span><span class="v ok">${fmt$(sum(["Aplicada"]))}</span><span class="d">${cnt["Aplicada"]||0} notas</span></div>
+  </div>
+  <div class="fchips" role="group" aria-label="Estado">${["",...NC_EST].map(e=>`<button class="fchip" data-ncfil="${e}" aria-pressed="${S.ncEstado===e}">${e||"Todas"} <span class="num">${e?cnt[e]||0:base.length}</span></button>`).join("")}</div>
+  ${list.length?ncTable(list):`<div class="panel empty">No hay notas de crédito${S.ncEstado?" en ese estado":""}.</div>`}
+  <p class="how"><b>Flujo:</b> Solicitada → En revisión → Aprobada → Emitida (con su N° de NC) → Aplicada (descontada del pago del cliente). Rechazada deja la nota fuera de los totales. Cada cambio de estado queda registrado con su fecha.</p>
+  </div>`;
+}
+function ncFormView(){
+  const f=S.ncForm, clientes=clientesConocidos();
+  const ocsCli=R.ocList.filter(o=>o.cliente===f.cliente);
+  const montoL=f.lineas.reduce((s,l)=>s+(num(l.q)*num(l.precio)),0);
+  return `<section class="panel" aria-label="Nota de crédito"><h2>${f.id?"Editar nota de crédito":"Nueva nota de crédito"}</h2>
+  <div class="ncgrid">
+    <div class="field"><span class="label">Cliente *</span><select data-nc="cliente"><option value="">— elegir —</option>${clientes.map(c=>`<option ${c===f.cliente?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">OC asociada</span><select data-nc="oc"><option value="">Sin OC</option>${ocsCli.map(o=>`<option value="${esc(o.oc)}" ${o.oc===f.oc?"selected":""}>${esc(o.oc)} · ${fdate(o.fecha)}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">Motivo *</span><select data-nc="motivo">${NC_MOT.map(m=>`<option ${m===f.motivo?"selected":""}>${m}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">Estado</span><select data-nc="estado">${NC_EST.map(e=>`<option ${e===f.estado?"selected":""}>${e}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">Fecha</span><input type="date" data-nc="fecha" value="${esc(f.fecha)}"></div>
+    <div class="field"><span class="label">N° NC</span><input data-nc="numero" value="${esc(f.numero)}" placeholder="Cuando se emita"></div>
+  </div>
+  <div class="field"><span class="label">Detalle (opcional)</span>
+    <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Talla</th><th class="r">Uds</th><th class="r">Precio unit.</th><th class="r">Subtotal</th><th></th></tr></thead><tbody>
+    ${f.lineas.map((l,i)=>`<tr><td><input class="tin wide" data-ncl="${i}:sku" value="${esc(l.sku)}"></td><td><input class="tin" data-ncl="${i}:talla" value="${esc(l.talla)}"></td><td class="r"><input class="tin r" data-ncl="${i}:q" value="${esc(l.q)}" inputmode="numeric"></td><td class="r"><input class="tin r" data-ncl="${i}:precio" value="${esc(l.precio)}" inputmode="numeric"></td><td class="num r">${fmt$(num(l.q)*num(l.precio))}</td><td><button class="btn small-btn" data-act="nc-delline" data-i="${i}" aria-label="Quitar línea">Quitar</button></td></tr>`).join("")||`<tr><td colspan="6" class="muted small">Sin líneas. Puedes ingresar solo el monto total abajo.</td></tr>`}
+    </tbody></table></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="nc-addline">Agregar línea</button>${f.oc?`<button class="btn" data-act="nc-faltantes">Agregar faltantes de la OC</button>`:""}</div>
+  </div>
+  <div class="ncgrid">
+    <div class="field"><span class="label">Monto total *</span>${f.lineas.length?`<div class="num" style="font-size:20px;padding:6px 0">${fmt$(montoL)}</div>`:`<input data-nc="monto" value="${esc(f.monto)}" inputmode="numeric" placeholder="$">`}</div>
+    <div class="field" style="grid-column:span 2"><span class="label">Notas</span><input data-nc="notas" value="${esc(f.notas)}" placeholder="Ej. el cliente reclama 5 pares con falla"></div>
+  </div>
+  ${f.err?`<div class="msg err">${esc(f.err)}</div>`:""}
+  <div class="formrow"><button class="btn primary" data-act="nc-guardar">Guardar</button><button class="btn" data-act="nc-cancelar">Cancelar</button></div>
+  </section>`;
+}
+function ncNueva(pre){S.ncForm={id:null,cliente:"",oc:"",motivo:NC_MOT[0],estado:"Solicitada",fecha:hoy(),numero:"",monto:"",notas:"",lineas:[],historial:[],...pre};}
+async function ncGuardar(){
+  const f=S.ncForm; f.err=null;
+  const lineas=f.lineas.map(l=>({sku:normSku(l.sku),talla:normTalla(l.talla),q:num(l.q),precio:num(l.precio)})).filter(l=>l.sku&&l.q>0);
+  const monto=lineas.length?lineas.reduce((s,l)=>s+l.q*l.precio,0):num(f.monto);
+  if(!f.cliente) f.err="Elige el cliente.";
+  else if(!(monto>0)) f.err="El monto debe ser mayor a cero.";
+  if(f.err){render(); return;}
+  const prev=S.ncs.find(n=>n.id===f.id);
+  const historial=(prev?.historial||[]).slice(); if(!prev||prev.estado!==f.estado) historial.push({estado:f.estado,fecha:hoy()});
+  const doc={numero:clean(f.numero),cliente:f.cliente,oc:f.oc,fecha:f.fecha,motivo:f.motivo,estado:f.estado,monto,lineas,notas:clean(f.notas),historial,actualizado:new Date().toISOString(),creado:prev?.creado||new Date().toISOString()};
+    try{ await API.guardarNc(f.id,doc); S.ncForm=null; await recargar(); }
+  catch(e){ f.err="No se pudo guardar: "+errTxt(e); }
+  render();
+}
+async function ncCambiarEstado(id,estado){
+  const n=S.ncs.find(x=>x.id===id); if(!n||n.estado===estado) return;
+  const historial=[...(n.historial||[]),{estado,fecha:hoy()}];
+  try{await API.actualizarNc(id,{estado,historial,actualizado:new Date().toISOString()}); await recargar();}catch(e){alertaGlobal(errTxt(e));}
+}
+
+/* ---------- Cargas ---------- */
+const SYN={
+  sku:["sku","material","articulo","codigo","cod","codigo material","style","estilo","modelo","item","referencia","ref","cod articulo","codigo articulo","style color","estilo color"],
+  talla:["talla","size","talle","tamano","tam","medida"],
+  oc:["oc","o.c","n oc","nro oc","n° oc","numero oc","orden de compra","orden compra","po","purchase order","po number","pedido cliente","nro orden"],
+  cliente:["cliente","customer","cadena","sold to","solicitante","destinatario","razon social"],
+  desc:["descripcion","description","nombre","desc","detalle","descripcion material","nombre producto"],
+  precio:["precio","precio unitario","precio neto","precio venta","precio de venta","p unit","p. unit","precio unit","valor unitario","unit price","price","pvp","precio lista","costo unitario","valor neto"],
+  cant:["cantidad","cant","qty","quantity","unidades","uds","unid","pares","pcs","piezas","sugerido","sugerida","despachado","despacho","cantidad despachada","cantidad pedida","solicitado","confirmado","enviado","cant oc","cantidad oc","unidades oc"]
+};
+const FIELDS=["sku","talla","oc","cliente","desc","precio","cant"];
+const nh=h=>String(h??"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[_\-]/g," ").replace(/\s+/g," ").trim();
+function esTallaHeader(h){const t=normTalla(h); if(ALPHA.includes(t)||t==="OSFA") return true; if(/^\d{1,2}(\.5)?$/.test(t)){const n=parseFloat(t); return n>=1&&n<=50;} return false;}
+function detectarHeader(aoa){
+  let best=0,score=-1;
+  for(let i=0;i<Math.min(25,aoa.length);i++){
+    const r=aoa[i]||[]; let s=0;
+    for(const c of r){const h=nh(c); if(!h) continue; if(Object.values(SYN).some(a=>a.includes(h))) s+=2; else if(esTallaHeader(c)) s+=1;}
+    if(s>score){score=s;best=i;}
+  }
+  return best;
+}
+function autoMap(headers){
+  const map={}, used=new Set(), H=headers.map(nh); FIELDS.forEach(f=>map[f]=-1);
+  for(const f of FIELDS) H.forEach((h,i)=>{ if(map[f]<0&&!used.has(i)&&SYN[f].includes(h)){map[f]=i;used.add(i);} });
+  for(const f of FIELDS) if(map[f]<0) H.forEach((h,i)=>{ if(map[f]<0&&!used.has(i)&&h&&!(f==="precio"&&/total/.test(h))&&SYN[f].some(w=>w.length>=4&&h.includes(w))){map[f]=i;used.add(i);} });
+  const sizeCols=headers.map((h,i)=>i).filter(i=>!used.has(i)&&esTallaHeader(headers[i]));
+  return {map,sizeCols,wide:map.talla<0&&sizeCols.length>=2};
+}
+function cargarHoja(){
+  const U=S.up, ws=U.wb.Sheets[U.sheet];
+  U.aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
+  U.hdr=detectarHeader(U.aoa); aplicarHeader();
+}
+function aplicarHeader(){const U=S.up; const a=autoMap(U.aoa[U.hdr]||[]); U.map=a.map; U.sizeCols=a.sizeCols; U.wide=a.wide;}
+function construir(){
+  const U=S.up, hdrs=U.aoa[U.hdr]||[], m=U.map, filas=[], desc={}, errores=[];
+  if(m.sku<0) errores.push("Falta indicar la columna de SKU.");
+  if(!U.wide&&m.talla<0) errores.push("Falta la columna de talla (o marca las tallas en columnas).");
+  if(U.wide&&!U.sizeCols.length) errores.push("Marca qué columnas son tallas.");
+  if(!U.wide&&m.cant<0) errores.push("Falta la columna de cantidad.");
+  if(m.cliente<0&&!U.cliente.trim()) errores.push("Escribe el cliente (el archivo no trae columna de cliente).");
+  if(U.tipo==="oc"&&m.oc<0&&!U.oc.trim()) errores.push("Escribe el N° de OC (el archivo no trae columna de OC).");
+  if(errores.length) return {filas,desc,errores};
+  for(let i=U.hdr+1;i<U.aoa.length;i++){
+    const r=U.aoa[i]; const sku=normSku(r[m.sku]); if(!sku||/TOTAL/.test(sku)) continue;
+    const cliente=m.cliente>=0?clean(r[m.cliente])||U.cliente.trim():U.cliente.trim();
+    const oc=U.tipo==="sugerido"?"":(m.oc>=0?clean(r[m.oc])||U.oc.trim():U.oc.trim());
+    const precio=m.precio>=0?Math.round(num(r[m.precio])*100)/100:0;
+    if(m.desc>=0&&r[m.desc]) desc[sku]=clean(r[m.desc]).slice(0,80);
+    if(U.wide){ for(const c of U.sizeCols){const q=num(r[c]); if(q>0) filas.push([cliente,oc,sku,normTalla(hdrs[c]),q,precio]);} }
+    else{ const q=num(r[m.cant]); const t=normTalla(r[m.talla]); if(q>0) filas.push([cliente,oc,sku,t||"S/T",q,precio]); }
+  }
+  if(!filas.length) errores.push("No encontré filas con SKU y cantidad mayor a cero. Revisa la fila de encabezado y las columnas.");
+  return {filas,desc,errores};
+}
+const TIPO_LBL={sugerido:"Sugerido",oc:"Orden de compra",despacho:"Despacho"};
+function vCargas(){
+  const U=S.up; const known=clientesConocidos();
+  let map="";
+  if(U.aoa){
+    const hdrs=U.aoa[U.hdr]||[];
+    const opts=(sel,opt)=>`<option value="-1">${opt?"No está en el archivo":"— elegir —"}</option>`+hdrs.map((h,i)=>`<option value="${i}" ${sel===i?"selected":""}>${esc(h||"(columna "+(i+1)+")")}</option>`).join("");
+    const tallaSel=`<option value="-1" ${!U.wide&&U.map.talla<0?"selected":""}>— elegir —</option><option value="wide" ${U.wide?"selected":""}>Tallas en columnas</option>`+hdrs.map((h,i)=>`<option value="${i}" ${!U.wide&&U.map.talla===i?"selected":""}>${esc(h||"(columna "+(i+1)+")")}</option>`).join("");
+    const b=construir();
+    const tot=b.filas.reduce((s,f)=>s+f[4],0), monto=b.filas.reduce((s,f)=>s+f[4]*f[5],0), nsku=new Set(b.filas.map(f=>f[2])).size, tl=sortTallas([...new Set(b.filas.map(f=>f[3]))]);
+    const dup=U.tipo==="oc"?S.cargas.filter(c=>c.tipo==="oc"&&(c.ocs||[]).some(k=>b.filas.some(f=>f[0]+"|"+f[1]===k))):S.cargas.filter(c=>c.tipo===U.tipo&&c.archivo===U.file?.name);
+    map=`<section class="panel"><h2>2 · Revisa las columnas</h2>
+    <div class="formrow">
+      ${U.wb.SheetNames.length>1?`<div class="field"><span class="label">Hoja</span><select id="uSheet">${U.wb.SheetNames.map(n=>`<option ${n===U.sheet?"selected":""}>${esc(n)}</option>`).join("")}</select></div>`:""}
+      <div class="field"><span class="label">Fila de encabezados</span><input id="uHdr" type="number" min="1" value="${U.hdr+1}" style="width:80px"></div>
+    </div>
+    <div class="maps">
+      <div class="field"><span class="label">SKU *</span><select data-map="sku">${opts(U.map.sku)}</select></div>
+      <div class="field"><span class="label">Talla *</span><select data-map="talla">${tallaSel}</select></div>
+      ${U.wide?"":`<div class="field"><span class="label">Cantidad *</span><select data-map="cant">${opts(U.map.cant)}</select></div>`}
+      ${U.tipo==="sugerido"?"":`<div class="field"><span class="label">N° OC</span><select data-map="oc">${opts(U.map.oc,1)}</select></div>`}
+      <div class="field"><span class="label">Cliente</span><select data-map="cliente">${opts(U.map.cliente,1)}</select></div>
+      <div class="field"><span class="label">Precio unitario</span><select data-map="precio">${opts(U.map.precio,1)}</select></div>
+      <div class="field"><span class="label">Descripción</span><select data-map="desc">${opts(U.map.desc,1)}</select></div>
+    </div>
+    ${U.wide?`<div class="field"><span class="label">Columnas que son tallas</span><div class="sizecols">${hdrs.map((h,i)=>h===""?"":`<label><input type="checkbox" data-size="${i}" ${U.sizeCols.includes(i)?"checked":""}>${esc(h)}</label>`).join("")}</div></div>`:""}
+    ${b.errores.length?b.errores.map(e=>`<div class="msg err">${esc(e)}</div>`).join(""):`
+      <div class="msg ok">${fmtN(b.filas.length)} líneas SKU-talla · ${fmtN(tot)} unidades${monto?" · "+fmt$(monto):""} · ${fmtN(nsku)} SKUs · tallas: ${esc(tl.join(", "))}</div>
+      ${U.map.precio<0&&U.tipo==="oc"?`<div class="msg warn">Esta OC no trae precio. Se usará el precio del sugerido si existe; si no, los montos quedan en blanco.</div>`:""}
+      ${dup.length?`<div class="msg warn">${U.tipo==="oc"?"Esta OC ya fue cargada antes.":"Ya subiste un archivo con este nombre como "+TIPO_LBL[U.tipo].toLowerCase()+"."} ${U.tipo==="oc"?`<label class="check" style="display:inline-flex;padding:0;margin-left:8px"><input type="checkbox" id="uReemp" ${U.reemplazar?"checked":""}> Reemplazar la carga anterior</label>`:"Si la guardas de nuevo, las unidades se suman dos veces."}</div>`:""}
+      <div class="tablewrap"><table><thead><tr><th>Cliente</th>${U.tipo==="sugerido"?"":"<th>OC</th>"}<th>SKU</th><th>Talla</th><th class="r">Cantidad</th><th class="r">Precio</th></tr></thead><tbody>
+      ${b.filas.slice(0,8).map(f=>`<tr><td>${esc(f[0])}</td>${U.tipo==="sugerido"?"":`<td class="mono">${esc(f[1]||"(se cruza por SKU-talla)")}</td>`}<td class="mono">${esc(f[2])}</td><td class="mono">${esc(f[3])}</td><td class="num r">${fmtN(f[4])}</td><td class="num r">${f[5]?fmt$(f[5]):"—"}</td></tr>`).join("")}
+      </tbody></table></div>`}
+    ${U.msg?`<div class="msg ${U.msg[0]}">${esc(U.msg[1])}</div>`:""}
+    <div class="formrow"><button class="btn primary" data-act="guardar" ${b.errores.length||U.guardando?"disabled":""}>${U.guardando?"Guardando…":"Guardar carga"}</button><button class="btn" data-act="cancelar">Cancelar</button></div>
+    </section>`;
+  }
+  const hist=S.cargas.slice().sort((a,b)=>String(b.creado).localeCompare(String(a.creado)));
+  return `<div style="display:grid;gap:16px">
+  <section class="panel"><h2>1 · Sube un archivo</h2>
+    <div class="formrow">
+      <div class="field"><span class="label">Tipo de archivo</span><div class="seg" role="radiogroup">${["sugerido","oc","despacho"].map(t=>`<label><input type="radio" name="uTipo" value="${t}" ${U.tipo===t?"checked":""}>${TIPO_LBL[t]}</label>`).join("")}</div></div>
+      <div class="field" style="flex:1 1 180px"><span class="label">Cliente</span><input id="uCliente" list="clientesList" value="${esc(U.cliente)}" placeholder="Si el archivo no trae columna"><datalist id="clientesList">${known.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
+      ${U.tipo==="sugerido"?"":`<div class="field"><span class="label">N° OC</span><input id="uOc" value="${esc(U.oc)}" placeholder="${U.tipo==="oc"?"Si el archivo no la trae":"Opcional"}"></div>`}
+      <div class="field"><span class="label">${U.tipo==="oc"?"Fecha de emisión":U.tipo==="despacho"?"Fecha de despacho":"Fecha de envío"}</span><input id="uFecha" type="date" value="${esc(U.fecha)}"></div>
+      ${U.tipo==="oc"?`<div class="field"><span class="label">Fecha límite de entrega</span><input id="uVence" type="date" value="${esc(U.vence)}"></div>`:""}
+    </div>
+    <label class="drop" id="drop" tabindex="0"><input type="file" id="uFile" accept=".xlsx,.xls,.csv" hidden>${U.file?`<b>${esc(U.file.name)}</b> · haz clic para cambiarlo`:`Arrastra aquí un Excel o CSV, o haz clic para elegirlo`}</label>
+    <p class="how">Formato mínimo: una fila por SKU con su <b>talla</b> y <b>cantidad</b>, o una fila por SKU con <b>una columna por talla</b>. Si trae <b>precio unitario</b>, la plataforma calcula montos. ${U.tipo==="despacho"?"Si el despacho no trae N° de OC, se asigna a las OCs del cliente por SKU y talla, de la más antigua a la más nueva.":""}</p>
+  </section>
+  ${map}
+  <section class="panel"><div class="panel-h"><h2>Historial de cargas</h2><span class="muted small">${hist.length} archivos</span></div>
+  ${hist.length?`<div class="hist">${hist.map(c=>`<div class="hrow"><span class="pill">${TIPO_LBL[c.tipo]}</span><div style="min-width:0"><div><b>${esc(c.cliente||(c.clientes||[]).join(", "))}</b>${c.ocLbl?` · <span class="mono">${esc(c.ocLbl)}</span>`:""}</div><div class="small muted">${esc(c.archivo)} · ${fdate(c.fecha)} · ${fmtN(c.filas)} líneas · ${fmtN(c.unidades)} uds${c.monto?" · "+fmt$(c.monto):""}</div></div>
+    <button class="btn danger ${S.armado===c.id?"armed":""}" data-del="${esc(c.id)}">${S.armado===c.id?"Confirmar":"Eliminar"}</button></div>`).join("")}</div>`:`<div class="empty">Todavía no has subido archivos. El orden natural es: sugerido, después la OC del cliente y al final cada despacho.</div>`}
+  </section></div>`;
+}
+async function leerArchivo(file){
+  const U=S.up; U.file=file; U.msg=null;
+  try{ const buf=await file.arrayBuffer(); U.wb=XLSX.read(buf,/\.(csv|txt)$/i.test(file.name)?{type:"array",raw:true}:{type:"array"}); U.sheet=U.wb.SheetNames[0]; cargarHoja(); }
+  catch(e){ U.aoa=null; U.wb=null; U.msg=["err","No pude leer el archivo. Sube un .xlsx, .xls o .csv."]; }
+  render();
+}
+async function guardar(){
+  const U=S.up, b=construir(); if(b.errores.length) return;
+  U.guardando=true; U.msg=null; render();
+  try{
+    if(U.tipo==="oc"&&U.reemplazar){
+      const keys=new Set(b.filas.map(f=>f[0]+"|"+f[1]));
+      for(const c of S.cargas.filter(c=>c.tipo==="oc"&&(c.ocs||[]).some(k=>keys.has(k)))) await API.borrarCarga(c.id);
+    }
+    await API.guardarCarga(metaDe(null,b),b.filas,b.desc);
+    resetUp(); S.up.msg=["ok","Carga guardada. Ya está considerada en todas las vistas."];
+    await recargar();
+  }catch(e){ U.guardando=false; U.msg=["err","No se pudo guardar: "+errTxt(e)]; }
+  render();
+}
+function metaDe(id,b){
+  const U=S.up, ocs=[...new Set(b.filas.map(f=>f[0]+"|"+f[1]))].filter(k=>!k.endsWith("|")), clientes=[...new Set(b.filas.map(f=>f[0]))];
+  const ocLbl=[...new Set(b.filas.map(f=>f[1]).filter(Boolean))];
+  return {id,tipo:U.tipo,cliente:clientes.length===1?clientes[0]:"",clientes:clientes.slice(0,20),ocs:ocs.slice(0,300),ocLbl:ocLbl.length>3?ocLbl.length+" OCs":ocLbl.join(", "),fecha:U.fecha,vence:U.tipo==="oc"?U.vence:"",archivo:U.file?.name||"",creado:new Date().toISOString(),filas:b.filas.length,unidades:b.filas.reduce((s,f)=>s+f[4],0),monto:b.filas.reduce((s,f)=>s+f[4]*f[5],0)};
+}
+function resetUp(){const t=S.up?.tipo||"oc"; S.up={tipo:t,cliente:"",oc:"",fecha:hoy(),vence:"",file:null,wb:null,sheet:"",aoa:null,hdr:0,map:{},wide:false,sizeCols:[],reemplazar:true,msg:null,guardando:false};}
+resetUp();
+/* ---------- Exportar ---------- */
+async function exportar(){
+  const {skuList,tallaList,ocList,A,Lall,ncs,desc}=R;
+  const wb=XLSX.utils.book_new(), add=(rows,n)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows.length?rows:[{"Sin datos":""}]),n);
+  add(A.map(a=>({Severidad:sevLbl[a.sev],Tipo:a.tipo,Detalle:a.titulo,Descripcion:a.texto,"Uds faltantes":a.q>0?a.q:""})),"Alertas");
+  add(ocList.map(o=>({Cliente:o.cliente,OC:o.oc,Emision:o.fecha,"Fecha limite":o.vence,Estado:o.estado,"Uds OC":o.ocQ,"Uds despachadas":o.ent,"Monto OC":o.montoOc,"Monto despachado":o.montoEnt,"Monto pendiente":o.montoPend,"Fill rate uds":o.fr,"Fill rate lineas":o.frL,"Ultimo despacho":o.ultimoDesp,"NC monto":o.nc.monto})),"OCs");
+  add(Lall.map(l=>({Cliente:l.cliente,OC:l.oc,SKU:l.sku,Descripcion:desc[l.sku]||"",Talla:l.talla,Precio:l.precio,"Uds OC":l.ocQ,Despachado:l.desp,Faltan:l.falta,"Monto pendiente":l.falta*l.precio,"Fill rate":l.ocQ?l.ent/l.ocQ:""})),"Detalle OC");
+  add(skuList.map(o=>({SKU:o.sku,Descripcion:o.desc,Sugerido:o.sug,OC:o.ocQ,"OC/Sugerido":o.conv,Despachado:o.ent,"Sobre OC":o.sobre,Faltan:o.ocQ?o.falta:"","Fill rate":o.fr,"Tallas en falla":o.tallasBajas.map(t=>t.talla).join(", ")})),"Por SKU");
+  add(tallaList.map(t=>({Talla:t.talla,OC:t.ocQ,Despachado:t.ent,Faltan:t.falta,"Fill rate":t.fr,"SKUs bajo umbral":t.skus.size})),"Por talla");
+  add(ncs.map(n=>({Fecha:n.fecha,"N° NC":n.numero,Cliente:n.cliente,OC:n.oc,Motivo:n.motivo,Estado:n.estado,Monto:n.monto,Notas:n.notas})),"Notas de credito");
+  const buf=XLSX.write(wb,{type:"array",bookType:"xlsx"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  a.download=`fill-rate-${hoy()}.xlsx`; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1000);
+}
+
+/* ---------- Eventos ---------- */
+function irTab(t){S.tab=t; try{localStorage.setItem("fr_tab",t);}catch(_){} render(); window.scrollTo({top:0});}
+document.addEventListener("click",async e=>{
+  const t=e.target.closest("[data-tab],[data-act],[data-sort],[data-sku],[data-del],[data-oc],[data-oc-link],[data-sug],[data-ocest],[data-ncfil],[data-ncdel]"); if(!t) return;
+  if(t.dataset.tab){ if(t.dataset.tab===S.tab){S.det={ocs:null,sugeridos:null};} irTab(t.dataset.tab); return;}
+  if(t.dataset.sort){const k=t.dataset.sort; S.sort=S.sort.k===k?{k,dir:-S.sort.dir}:{k,dir:k==="fr"||k==="sku"||k==="desc"?1:-1}; render(); return;}
+  if(t.dataset.sku){const s=t.dataset.sku; S.abiertos.has(s)?S.abiertos.delete(s):S.abiertos.add(s); render(); return;}
+  if(t.dataset.oc){S.det.ocs=t.dataset.oc; S.ocSoloPend=false; render(); window.scrollTo({top:0}); return;}
+  if(t.dataset.ocLink){e.preventDefault(); S.det.ocs=t.dataset.ocLink; irTab("ocs"); return;}
+  if(t.dataset.sug){S.det.sugeridos=t.dataset.sug; render(); window.scrollTo({top:0}); return;}
+  if(t.dataset.ocest!=null){S.ocEstado=t.dataset.ocest; render(); return;}
+  if(t.dataset.ncfil!=null){S.ncEstado=t.dataset.ncfil; render(); return;}
+  const arm=(id,fn)=>{ if(S.armado!==id){S.armado=id; render(); setTimeout(()=>{if(S.armado===id){S.armado=null;render();}},4000); return;} S.armado=null; fn(); };
+  if(t.dataset.del){const id=t.dataset.del; arm(id,async()=>{const c=S.cargas.find(x=>x.id===id); if(c){t.disabled=true; try{await API.borrarCarga(c.id); await recargar();}catch(e){alertaGlobal(errTxt(e));} } render();}); return;}
+  if(t.dataset.ncdel){const id=t.dataset.ncdel; arm(id,async()=>{ try{await API.borrarNc(id); await recargar();}catch(e){alertaGlobal(errTxt(e));} render();}); return;}
+  const a=t.dataset.act, f=S.ncForm;
+  if(a==="vertodas"){S.verTodas=!S.verTodas; render();}
+  if(a==="guardar") guardar();
+  if(a==="cancelar"){resetUp(); render();}
+  if(a==="volver-oc"){S.det.ocs=null; render();}
+  if(a==="volver-sug"){S.det.sugeridos=null; render();}
+  if(a==="nc-nueva"){ncNueva({cliente:S.filtros.cliente}); render();}
+  if(a==="nc-desde-oc"){const o=R.ocs.get(t.dataset.k); ncNueva({cliente:o.cliente,oc:o.oc}); irTab("nc");}
+  if(a==="nc-editar"){const n=S.ncs.find(x=>x.id===t.dataset.id); if(n){S.ncForm={...n,monto:String(n.monto||""),lineas:(n.lineas||[]).map(l=>({...l})),err:null}; render(); window.scrollTo({top:0});}}
+  if(a==="nc-cancelar"){S.ncForm=null; render();}
+  if(a==="nc-guardar") ncGuardar();
+  if(a==="nc-addline"&&f){f.lineas.push({sku:"",talla:"",q:"",precio:""}); render();}
+  if(a==="nc-delline"&&f){f.lineas.splice(+t.dataset.i,1); render();}
+  if(a==="nc-faltantes"&&f){const o=R.ocs.get(f.cliente+"|"+f.oc); if(o){for(const l of o.L) if(l.falta>0) f.lineas.push({sku:l.sku,talla:l.talla,q:String(l.falta),precio:String(l.precio||"")}); if(f.motivo===NC_MOT[0]) f.motivo="Faltante facturado";} render();}
+});
+$("#btnIrCargar").onclick=()=>{irTab("cargas"); setTimeout(()=>$("#drop")?.scrollIntoView({block:"center"}),0);};
+$("#btnExport").onclick=exportar;
+$("#fCliente").onchange=e=>{S.filtros.cliente=e.target.value; S.filtros.oc=""; S.det={ocs:null,sugeridos:null}; render();};
+$("#fOc").onchange=e=>{S.filtros.oc=e.target.value; render();};
+let qT; $("#fQ").oninput=e=>{clearTimeout(qT); qT=setTimeout(()=>{S.filtros.q=e.target.value; render();},150);};
+$("#fCerradas").onchange=e=>{S.filtros.soloCerradas=e.target.checked; render();};
+let uT; $("#fUmbral").oninput=e=>{const v=Math.max(50,Math.min(100,parseInt(e.target.value)||90)); clearTimeout(uT);
+  uT=setTimeout(async()=>{ if(v===S.config.umbral) return; S.config.umbral=v; render(); try{await API.setConfig({umbral:v});}catch(_){} },500);};
+document.addEventListener("change",async e=>{
+  const t=e.target, U=S.up;
+  if(t.name==="uTipo"){U.tipo=t.value; render(); return;}
+  if(t.id==="uFile"&&t.files[0]){leerArchivo(t.files[0]); return;}
+  if(t.id==="uSheet"){U.sheet=t.value; cargarHoja(); render(); return;}
+  if(t.id==="uHdr"){U.hdr=Math.max(0,(parseInt(t.value)||1)-1); aplicarHeader(); render(); return;}
+  if(t.id==="ocSoloPend"){S.ocSoloPend=t.checked; render(); return;}
+  if(t.dataset.map){const f=t.dataset.map; if(f==="talla"&&t.value==="wide"){U.wide=true; if(!U.sizeCols.length) U.sizeCols=(U.aoa[U.hdr]||[]).map((h,i)=>i).filter(i=>esTallaHeader(U.aoa[U.hdr][i]));} else {if(f==="talla") U.wide=false; U.map[f]=parseInt(t.value);} render(); return;}
+  if(t.dataset.size!=null){const i=+t.dataset.size; U.sizeCols=t.checked?[...U.sizeCols,i]:U.sizeCols.filter(x=>x!==i); render(); return;}
+  if(t.id==="uReemp"){U.reemplazar=t.checked; return;}
+  if(t.dataset.ncest){ncCambiarEstado(t.dataset.ncest,t.value); return;}
+  if(t.dataset.nc&&S.ncForm){const k=t.dataset.nc; S.ncForm[k]=t.value; if(k==="cliente"){S.ncForm.oc="";} if(k==="cliente"||k==="oc") render(); return;}
+  if(t.dataset.cerrar!=null){const [c,o]=t.dataset.cerrar.split("|"); const k=ocKey(c,o); S.estadoOc[k]=t.checked; render();
+    if(!esDemo()){try{await API.setEstadoOc(c,o,t.checked);}catch(e){alertaGlobal(errTxt(e));}} return;}
+});
+document.addEventListener("input",e=>{const t=e.target,U=S.up;
+  if(t.id==="uCliente"){U.cliente=t.value; if(U.aoa) debRender();}
+  if(t.id==="uOc"){U.oc=t.value; if(U.aoa) debRender();}
+  if(t.id==="uFecha"){U.fecha=t.value;}
+  if(t.id==="uVence"){U.vence=t.value;}
+  if(t.dataset.nc&&S.ncForm&&t.tagName==="INPUT"){S.ncForm[t.dataset.nc]=t.value;}
+  if(t.dataset.ncl&&S.ncForm){const [i,k]=t.dataset.ncl.split(":"); S.ncForm.lineas[+i][k]=t.value; if(k==="q"||k==="precio") debRender();}
+});
+let dR; function debRender(){clearTimeout(dR); dR=setTimeout(()=>{const ae=document.activeElement; const key=ae?.id||ae?.dataset?.ncl; render();
+  const el=ae?.id?document.getElementById(ae.id):ae?.dataset?.ncl?document.querySelector(`[data-ncl="${ae.dataset.ncl}"]`):null;
+  if(el&&key){el.focus(); const v=el.value; try{el.setSelectionRange(v.length,v.length);}catch(_){}}},500);}
+document.addEventListener("dragover",e=>{const d=e.target.closest?.("#drop"); if(d){e.preventDefault(); d.classList.add("over");}});
+document.addEventListener("dragleave",e=>{const d=e.target.closest?.("#drop"); if(d) d.classList.remove("over");});
+document.addEventListener("drop",e=>{const d=e.target.closest?.("#drop"); if(d){e.preventDefault(); d.classList.remove("over"); const f=e.dataTransfer.files[0]; if(f) leerArchivo(f);}});
+document.addEventListener("keydown",e=>{
+  if(e.target.id==="drop"&&(e.key==="Enter"||e.key===" ")){e.preventDefault(); $("#uFile").click();}
+  const r=e.target.closest?.("tr.row"); if(r&&(e.key==="Enter")) r.click();
+});
+const tip=$("#tip");
+document.addEventListener("mousemove",e=>{const g=e.target.closest?.("[data-tip]"); if(!g){tip.hidden=true;return;} tip.textContent=g.dataset.tip; tip.hidden=false;
+  const x=Math.min(e.clientX+14,window.innerWidth-tip.offsetWidth-8), y=e.clientY+14+tip.offsetHeight>window.innerHeight?e.clientY-tip.offsetHeight-10:e.clientY+14; tip.style.left=x+"px"; tip.style.top=y+"px";});
+
+/* ---------- Conexión a la base de datos (Supabase) ---------- */
+const CFG=window.CONFIG||{};
+const sb=(CFG.supabaseUrl&&CFG.supabaseAnonKey&&!/TU_/.test(CFG.supabaseUrl))?window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnonKey):null;
+function errTxt(e){const m=e&&(e.message||e.error_description||e.code)||"error desconocido"; return /row-level security|permission/i.test(m)?"tu usuario no tiene permiso para esta acción.":m;}
+function alertaGlobal(t){S.errDb=t; render(); setTimeout(()=>{if(S.errDb===t){S.errDb=null; render();}},6000);}
+const chk=r=>{if(r.error) throw r.error; return r.data;};
+async function todas(q){ // pagina de a 1000 filas
+  const out=[]; for(let i=0;;i+=1000){const d=chk(await q().range(i,i+999)); out.push(...d); if(d.length<1000) return out;}
+}
+const API={
+  async guardarCarga(meta,filas,desc){
+    const row={tipo:meta.tipo,cliente:meta.cliente||null,clientes:meta.clientes,ocs:meta.ocs,oc_lbl:meta.ocLbl||null,fecha:meta.fecha||null,vence:meta.vence||null,archivo:meta.archivo,filas:meta.filas,unidades:meta.unidades,monto:meta.monto};
+    const c=chk(await sb.from("cargas").insert(row).select("id").single());
+    try{
+      for(let i=0;i<filas.length;i+=1000){
+        const lote=filas.slice(i,i+1000).map(f=>({carga_id:c.id,cliente:f[0],oc:f[1]||"",sku:f[2],talla:f[3],q:f[4],precio:f[5]||0,descripcion:desc[f[2]]||null}));
+        chk(await sb.from("carga_filas").insert(lote));
+      }
+    }catch(e){ await sb.from("cargas").delete().eq("id",c.id); throw e; }
+  },
+  async borrarCarga(id){ chk(await sb.from("cargas").delete().eq("id",id)); delete S.partes[id]; },
+  async setEstadoOc(cliente,oc,cerrada){ chk(await sb.from("estado_oc").upsert({cliente,oc,cerrada,actualizado:new Date().toISOString()})); },
+  async setConfig(v){ chk(await sb.from("config").upsert({clave:"general",valor:v})); },
+  async guardarNc(id,doc){ const {creado,...d}=doc; d.fecha=d.fecha||null; if(id) chk(await sb.from("notas_credito").update(d).eq("id",id)); else chk(await sb.from("notas_credito").insert(d)); },
+  async actualizarNc(id,patch){ chk(await sb.from("notas_credito").update(patch).eq("id",id)); },
+  async borrarNc(id){ chk(await sb.from("notas_credito").delete().eq("id",id)); }
+};
+let recargando=null;
+async function recargar(){
+  if(recargando) return recargando;
+  recargando=(async()=>{
+    try{
+      const [cargas,ncs,est,cfg]=await Promise.all([
+        todas(()=>sb.from("cargas").select("*").order("creado")),
+        todas(()=>sb.from("notas_credito").select("*").order("fecha")),
+        todas(()=>sb.from("estado_oc").select("*")),
+        sb.from("config").select("*").eq("clave","general").maybeSingle().then(chk)]);
+      const nuevas=cargas.map(c=>c.id).filter(id=>!S.partes[id]);
+      for(let i=0;i<nuevas.length;i+=50){
+        const ids=nuevas.slice(i,i+50);
+        const filas=await todas(()=>sb.from("carga_filas").select("carga_id,cliente,oc,sku,talla,q,precio,descripcion").in("carga_id",ids).order("id"));
+        const g={}; for(const id of ids) g[id]={filas:[],desc:{}};
+        for(const f of filas){const p=g[f.carga_id]; p.filas.push([f.cliente,f.oc,f.sku,f.talla,+f.q,+f.precio]); if(f.descripcion) p.desc[f.sku]=f.descripcion;}
+        for(const id of ids) S.partes[id]=[g[id]];
+      }
+      S.cargas=cargas.map(c=>({...c,ocLbl:c.oc_lbl||"",fecha:c.fecha||"",vence:c.vence||"",unidades:+c.unidades,monto:+c.monto}));
+      S.ncs=ncs.map(n=>({...n,monto:+n.monto,fecha:n.fecha||""}));
+      const m={}; for(const e of est) m[ocKey(e.cliente,e.oc)]=e.cerrada; S.estadoOc=m;
+      if(cfg&&cfg.valor&&cfg.valor.umbral) S.config.umbral=cfg.valor.umbral;
+      S.errDb=null;
+    }catch(e){ S.errDb=errTxt(e); }
+    recargando=null; render();
+  })();
+  return recargando;
+}
+function pantallaLogin(msg){
+  $("#app").hidden=true; const L=$("#login"); L.hidden=false;
+  L.innerHTML=`<form id="fLogin"><div><div class="label">Control Fill Rate</div><h1>Ingresar</h1></div>
+    ${sb?`<div class="field"><span class="label">Correo</span><input id="lEmail" type="email" autocomplete="username" required></div>
+    <div class="field"><span class="label">Contraseña</span><input id="lPass" type="password" autocomplete="current-password" required></div>
+    ${msg?`<div class="msg err">${esc(msg)}</div>`:""}
+    <button class="btn primary" type="submit">Entrar</button>
+    <p class="muted small">¿No tienes acceso? Pídeselo a quien administra la plataforma.</p>`
+    :`<div class="msg err">Falta configurar la conexión a Supabase en <b>config.js</b>.</div>`}</form>`;
+  const f=$("#fLogin"); f.onsubmit=async e=>{e.preventDefault(); const b=f.querySelector("button"); b.disabled=true; b.textContent="Entrando…";
+    const {error}=await sb.auth.signInWithPassword({email:$("#lEmail").value.trim(),password:$("#lPass").value});
+    if(error) pantallaLogin(/invalid/i.test(error.message)?"Correo o contraseña incorrectos.":error.message);};
+}
+let canal=null, iniciado=false;
+async function iniciar(session){
+  if(!session){iniciado=false; if(canal){sb.removeChannel(canal); canal=null;} pantallaLogin(); return;}
+  if(iniciado) return; iniciado=true;
+  S.email=(session.user.email||"").toLowerCase();
+  const {data}=await sb.from("usuarios_permitidos").select("rol").eq("email",S.email).maybeSingle();
+  if(!data){iniciado=false; await sb.auth.signOut(); pantallaLogin(`${S.email} no tiene acceso a esta plataforma.`); return;}
+  S.rol=data.rol; document.body.classList.toggle("lector",S.rol==="lector"); document.body.classList.toggle("editor",S.rol==="editor");
+  $("#who").textContent=S.email; $("#login").hidden=true; $("#app").hidden=false; S.dbOk=true;
+  render(); await recargar();
+  let t; const tocar=()=>{clearTimeout(t); t=setTimeout(recargar,800);};
+  canal=sb.channel("cambios");
+  for(const tb of ["cargas","notas_credito","estado_oc","config"]) canal.on("postgres_changes",{event:"*",schema:"public",table:tb},tocar);
+  canal.subscribe();
+}
+$("#btnSalir").onclick=()=>sb&&sb.auth.signOut();
+if(!sb) pantallaLogin();
+else{
+  sb.auth.getSession().then(({data})=>iniciar(data.session));
+  sb.auth.onAuthStateChange((ev,session)=>{ if(ev==="SIGNED_IN") iniciar(session); if(ev==="SIGNED_OUT") iniciar(null); });
+}
+})();
+</script>
+</body>
+</html>

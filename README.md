@@ -1,0 +1,55 @@
+# Control Fill Rate · PUMA
+
+Plataforma web para seguir el ciclo **sugerido → orden de compra → despacho → nota de crédito**, con fill rate por SKU y talla, alertas automáticas, historial de OCs y sugeridos, y gestión de notas de crédito.
+
+- **Sitio:** GitHub Pages, gratis (archivos estáticos: `index.html` + `config.js`).
+- **Datos y login:** Supabase (Postgres + autenticación). Los datos **nunca** quedan en este repositorio.
+
+## Puesta en marcha (gratis, una sola vez)
+
+Todo se crea con el **correo de PUMA**, no con cuentas personales.
+
+### 1. Base de datos (Supabase, plan Free)
+1. Crea una cuenta en [supabase.com](https://supabase.com) con tu correo de PUMA y luego un **New project** en la región **South America (São Paulo)**. Guarda la contraseña de la base de datos.
+2. En **SQL Editor → New query**, pega todo `supabase/schema.sql` y pon **Run**.
+3. En **Authentication → Sign In / Providers → Email**, desactiva **Allow new users to sign up**.
+4. En **Project Settings → API** copia la **Project URL** y la **anon public key** y pégalas en `config.js`.
+
+### 2. Usuarios (tú y tu equipo)
+Para cada persona:
+1. **Authentication → Users → Add user → Create new user**: correo de PUMA, contraseña y *Auto confirm user*.
+2. En **SQL Editor**:
+   ```sql
+   insert into usuarios_permitidos (email, rol, nombre)
+   values ('nombre.apellido@puma.com', 'admin', 'Nombre Apellido');
+   ```
+   Roles:
+   - `lector`: solo mira.
+   - `editor`: sube archivos y gestiona OCs y notas de crédito.
+   - `admin`: además elimina notas de crédito y administra usuarios.
+
+### 3. Publicar la página (GitHub Pages, gratis)
+1. Crea una cuenta en [github.com](https://github.com) con tu correo de PUMA.
+2. **New repository** → nombre `puma-oc` → **Public** (Pages gratis exige repo público; el código no contiene datos) → Create.
+3. **Add file → Upload files** y arrastra `index.html`, `config.js`, `README.md` y la carpeta `supabase`. Luego **Commit changes**.
+4. **Settings → Pages → Source: Deploy from a branch → Branch: main / (root) → Save**.
+5. En 1 o 2 minutos aparece el link en esa misma pantalla: `https://<tu-usuario>.github.io/puma-oc/`.
+
+### Para tener en cuenta
+- **Plan gratis de Supabase:** si nadie entra en 7 días, el proyecto se pausa. No se pierde nada: se reactiva desde el dashboard con un clic.
+- **Respaldo:** usa el botón *Descargar Excel* una vez al mes.
+- **Continuidad:** invita a una persona de tu equipo como Owner en Supabase (**Organization → Team**) y como colaboradora en GitHub, para que el sistema no dependa solo de ti.
+
+## Uso
+1. **Cargas:** sube el sugerido, la OC (con precio unitario y fecha límite de entrega) y cada despacho, en Excel o CSV. Las columnas se detectan solas y se pueden corregir antes de guardar.
+2. **Resumen / Por SKU / Por talla:** fill rate y alertas por debajo del umbral.
+3. **Órdenes de compra:** historial, estado (Sin despacho, Parcial, Atrasada, Completa, Cerrada) y detalle con precios y despachos.
+4. **Sugeridos:** cada sugerido comparado con lo que el cliente compró después.
+5. **Notas de crédito:** flujo Solicitada → En revisión → Aprobada → Emitida → Aplicada (o Rechazada).
+
+## Estructura
+```
+index.html                 la aplicación completa
+config.js                  URL y anon key de Supabase
+supabase/schema.sql        tablas, reglas de seguridad y cambios en vivo
+```
