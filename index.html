@@ -233,7 +233,7 @@ try{let t=localStorage.getItem("fr_tab"); if(t==="oc") t="ocs"; if(t) S.tab=t;}c
 
 /* ---------- Normalización ---------- */
 const ALPHA=["XXS","XS","S","M","L","XL","XXL","XXXL","4XL","5XL"];
-const normSku=s=>String(s??"").trim().toUpperCase().replace(/\s+/g,"");
+const normSku=s=>{const x=String(s??"").trim().toUpperCase().replace(/[^A-Z0-9]/g,""); return /^\d{8}$/.test(x)?x.slice(0,6)+"-"+x.slice(6):x;};
 function normTalla(t){
   let s=String(t??"").trim().toUpperCase().replace(",",".");
   if(/^\d+(\.\d+)?$/.test(s)) s=String(parseFloat(s));
@@ -303,8 +303,8 @@ function fuente(){
     const ps=partes[c.id]; if(!ps) continue;
     const dest=c.tipo==="sugerido"?filas.sug:c.tipo==="oc"?filas.oc:filas.desp;
     for(const p of ps){
-      Object.assign(desc,p.desc||{});
-      for(const f of p.filas) dest.push({cliente:f[0],oc:f[1],sku:f[2],talla:f[3],q:f[4],precio:f[5]||0,fecha:c.fecha||"",vence:c.vence||"",carga:c.id,archivo:c.archivo||""});
+      for(const k in p.desc||{}) desc[normSku(k)]=p.desc[k];
+      for(const f of p.filas) dest.push({cliente:f[0],oc:f[1],sku:normSku(f[2]),talla:f[3],q:f[4],precio:f[5]||0,fecha:c.fecha||"",vence:c.vence||"",carga:c.id,archivo:c.archivo||""});
     }
   }
   return {filas,desc,cargas,ncs:esDemo()&&!S.ncs.length?DEMO.ncs:S.ncs};
@@ -786,6 +786,22 @@ function autoMap(headers){
   const sizeCols=headers.map((h,i)=>i).filter(i=>!used.has(i)&&esTallaHeader(headers[i]));
   return {map,sizeCols,wide:map.talla<0&&sizeCols.length>=2};
 }
+/* Formato fijo del sugerido PUMA: hoja con "Cod", "SUGERIDO CARGA UN." y "CURVAS A CARGAR";
+   todas las columnas con encabezado después de "CURVAS A CARGAR" son tallas (UK). */
+function detectarSugeridoPuma(wb){
+  for(const name of wb.SheetNames){
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:""});
+    for(let i=0;i<Math.min(60,aoa.length);i++){
+      const H=(aoa[i]||[]).map(nh);
+      const cod=H.indexOf("cod"), un=H.findIndex(h=>/^sugerido carga un/.test(h)), cur=H.findIndex(h=>/^curvas a cargar/.test(h));
+      if(cod<0||un<0||cur<0) continue;
+      const sizeCols=[]; for(let j=cur+1;j<H.length;j++) if(H[j]!=="") sizeCols.push(j);
+      const precio=[H.indexOf("especial price"),H.indexOf("whs price")].find(x=>x>=0);
+      return {sheet:name,aoa,hdr:i,un,sizeCols,map:{sku:cod,talla:-1,oc:-1,cliente:-1,desc:H.indexOf("style name"),precio:precio??-1,cant:-1}};
+    }
+  }
+  return null;
+}
 function cargarHoja(){
   const U=S.up, ws=U.wb.Sheets[U.sheet];
   U.aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
@@ -824,7 +840,12 @@ function vCargas(){
     const b=construir();
     const tot=b.filas.reduce((s,f)=>s+f[4],0), monto=b.filas.reduce((s,f)=>s+f[4]*f[5],0), nsku=new Set(b.filas.map(f=>f[2])).size, tl=sortTallas([...new Set(b.filas.map(f=>f[3]))]);
     const dup=U.tipo==="oc"?S.cargas.filter(c=>c.tipo==="oc"&&(c.ocs||[]).some(k=>b.filas.some(f=>f[0]+"|"+f[1]===k))):S.cargas.filter(c=>c.tipo===U.tipo&&c.archivo===U.file?.name);
-    map=`<section class="panel"><h2>2 · Revisa las columnas</h2>
+    let totArch=null;
+    if(U.formato&&U.formato.un>=0){totArch=0; for(let i=U.hdr+1;i<U.aoa.length;i++){const r=U.aoa[i]; if(normSku(r[U.map.sku])) totArch+=num(r[U.formato.un]);}}
+    const ocultar=U.formato&&!U.manual;
+    map=`<section class="panel"><h2>2 · ${ocultar?"Revisa antes de guardar":"Revisa las columnas"}</h2>
+    ${U.formato?`<div class="msg ok"><b>Formato ${esc(U.formato.nombre)} reconocido.</b> Hoja “${esc(U.sheet)}”, ${U.sizeCols.length} columnas de talla (UK)${U.map.precio>=0?`, precio desde “${esc(hdrs[U.map.precio])}”`:""}. <a href="#" data-act="manual">${U.manual?"Ocultar columnas":"Ajustar columnas"}</a></div>`:""}
+    <div ${ocultar?"hidden":""}>
     <div class="formrow">
       ${U.wb.SheetNames.length>1?`<div class="field"><span class="label">Hoja</span><select id="uSheet">${U.wb.SheetNames.map(n=>`<option ${n===U.sheet?"selected":""}>${esc(n)}</option>`).join("")}</select></div>`:""}
       <div class="field"><span class="label">Fila de encabezados</span><input id="uHdr" type="number" min="1" value="${U.hdr+1}" style="width:80px"></div>
@@ -839,7 +860,9 @@ function vCargas(){
       <div class="field"><span class="label">Descripción</span><select data-map="desc">${opts(U.map.desc,1)}</select></div>
     </div>
     ${U.wide?`<div class="field"><span class="label">Columnas que son tallas</span><div class="sizecols">${hdrs.map((h,i)=>h===""?"":`<label><input type="checkbox" data-size="${i}" ${U.sizeCols.includes(i)?"checked":""}>${esc(h)}</label>`).join("")}</div></div>`:""}
+    </div>
     ${b.errores.length?b.errores.map(e=>`<div class="msg err">${esc(e)}</div>`).join(""):`
+      ${totArch!=null?(Math.abs(totArch-tot)<0.5?`<div class="msg ok">Cuadra con el total del archivo (columna “SUGERIDO CARGA UN.”): ${fmtN(totArch)} uds.</div>`:`<div class="msg warn">No cuadra: las tallas suman ${fmtN(tot)} uds y la columna “SUGERIDO CARGA UN.” dice ${fmtN(totArch)}. Revisa el archivo antes de guardar.</div>`):""}
       <div class="msg ok">${fmtN(b.filas.length)} líneas SKU-talla · ${fmtN(tot)} unidades${monto?" · "+fmt$(monto):""} · ${fmtN(nsku)} SKUs · tallas: ${esc(tl.join(", "))}</div>
       ${U.map.precio<0&&U.tipo==="oc"?`<div class="msg warn">Esta OC no trae precio. Se usará el precio del sugerido si existe; si no, los montos quedan en blanco.</div>`:""}
       ${dup.length?`<div class="msg warn">${U.tipo==="oc"?"Esta OC ya fue cargada antes.":"Ya subiste un archivo con este nombre como "+TIPO_LBL[U.tipo].toLowerCase()+"."} ${U.tipo==="oc"?`<label class="check" style="display:inline-flex;padding:0;margin-left:8px"><input type="checkbox" id="uReemp" ${U.reemplazar?"checked":""}> Reemplazar la carga anterior</label>`:"Si la guardas de nuevo, las unidades se suman dos veces."}</div>`:""}
@@ -871,7 +894,9 @@ function vCargas(){
 }
 async function leerArchivo(file){
   const U=S.up; U.file=file; U.msg=null;
-  try{ const buf=await file.arrayBuffer(); U.wb=XLSX.read(buf,/\.(csv|txt)$/i.test(file.name)?{type:"array",raw:true}:{type:"array"}); U.sheet=U.wb.SheetNames[0]; cargarHoja(); }
+  try{ const buf=await file.arrayBuffer(); U.wb=XLSX.read(buf,/\.(csv|txt)$/i.test(file.name)?{type:"array",raw:true}:{type:"array"}); const pz=detectarSugeridoPuma(U.wb);
+    if(pz){U.formato={tipo:"sugerido",nombre:"Sugerido PUMA",un:pz.un}; U.tipo="sugerido"; U.sheet=pz.sheet; U.aoa=pz.aoa; U.hdr=pz.hdr; U.map=pz.map; U.wide=true; U.sizeCols=pz.sizeCols; U.manual=false;}
+    else{U.formato=null; U.sheet=U.wb.SheetNames[0]; cargarHoja();} }
   catch(e){ U.aoa=null; U.wb=null; U.msg=["err","No pude leer el archivo. Sube un .xlsx, .xls o .csv."]; }
   render();
 }
@@ -928,6 +953,7 @@ document.addEventListener("click",async e=>{
   if(t.dataset.ncdel){const id=t.dataset.ncdel; arm(id,async()=>{ try{await API.borrarNc(id); await recargar();}catch(e){alertaGlobal(errTxt(e));} render();}); return;}
   const a=t.dataset.act, f=S.ncForm;
   if(a==="vertodas"){S.verTodas=!S.verTodas; render();}
+  if(a==="manual"){e.preventDefault(); S.up.manual=!S.up.manual; render();}
   if(a==="guardar") guardar();
   if(a==="cancelar"){resetUp(); render();}
   if(a==="volver-oc"){S.det.ocs=null; render();}
@@ -953,7 +979,7 @@ document.addEventListener("change",async e=>{
   const t=e.target, U=S.up;
   if(t.name==="uTipo"){U.tipo=t.value; render(); return;}
   if(t.id==="uFile"&&t.files[0]){leerArchivo(t.files[0]); return;}
-  if(t.id==="uSheet"){U.sheet=t.value; cargarHoja(); render(); return;}
+  if(t.id==="uSheet"){U.sheet=t.value; U.formato=null; cargarHoja(); render(); return;}
   if(t.id==="uHdr"){U.hdr=Math.max(0,(parseInt(t.value)||1)-1); aplicarHeader(); render(); return;}
   if(t.id==="ocSoloPend"){S.ocSoloPend=t.checked; render(); return;}
   if(t.dataset.map){const f=t.dataset.map; if(f==="talla"&&t.value==="wide"){U.wide=true; if(!U.sizeCols.length) U.sizeCols=(U.aoa[U.hdr]||[]).map((h,i)=>i).filter(i=>esTallaHeader(U.aoa[U.hdr][i]));} else {if(f==="talla") U.wide=false; U.map[f]=parseInt(t.value);} render(); return;}
