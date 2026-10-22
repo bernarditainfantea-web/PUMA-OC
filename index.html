@@ -140,6 +140,15 @@ svg .thr{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 4;opacity:.7}
 .how b{color:var(--ink)}
 .sev.neutral{background:var(--sunken);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
 .fchips{display:flex;flex-wrap:wrap;gap:6px}
+.fun{display:grid;gap:8px}
+.fun-row{display:grid;grid-template-columns:110px minmax(80px,1fr) minmax(0,230px);gap:4px 12px;align-items:center}
+.fun-l{font-weight:600;font-size:14px}
+.fun-bar{height:14px;background:var(--sunken);border-radius:4px;overflow:hidden}
+.fun-bar i{display:block;height:100%;border-radius:4px}
+.fun-sug{background:var(--muted)} .fun-oc{background:var(--accent)} .fun-desp{background:var(--ok)}
+.fun-v{font-size:13px;white-space:nowrap;text-align:right;overflow:hidden;text-overflow:ellipsis}
+.fun-n{grid-column:2 / -1}
+@media (max-width:560px){.fun-row{grid-template-columns:1fr}.fun-n{grid-column:auto}}
 .fchip{font:inherit;font-size:13.5px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:20px;padding:5px 12px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .fchip .num{font-size:12px;color:var(--muted)}
 .fchip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -282,7 +291,7 @@ function demo(){
       });
     });
     add("demo-sug-"+ci,{tipo:"sugerido",cliente:cli,fecha:"2026-09-01",archivo:"sugerido_"+(ci?"B":"A")+"_temporada.xlsx",creado:"2026-09-01"},sug);
-    ocs.forEach(([ocn,f,v])=>{ if(oc[ocn]) add("demo-oc-"+ocn,{tipo:"oc",cliente:cli,ocLbl:ocn,ocs:[cli+"|"+ocn],fecha:f,vence:v,archivo:ocn+".xlsx",creado:f},oc[ocn]); });
+    ocs.forEach(([ocn,f,v])=>{ if(oc[ocn]) add("demo-oc-"+ocn,{tipo:"oc",sugerido_id:"demo-sug-"+ci,cliente:cli,ocLbl:ocn,ocs:[cli+"|"+ocn],fecha:f,vence:v,archivo:ocn+".xlsx",creado:f},oc[ocn]); });
     add("demo-desp-"+ci,{tipo:"despacho",cliente:cli,fecha:"2026-10-01",archivo:"despacho_"+(ci?"B":"A")+"_01-10.xlsx",creado:"2026-10-01"},desp);
     if(pend.length) add("demo-desp2-"+ci,{tipo:"despacho",cliente:cli,fecha:"2026-10-18",archivo:"despacho_A_18-10.xlsx",creado:"2026-10-18"},pend);
   });
@@ -304,7 +313,7 @@ function fuente(){
     const dest=c.tipo==="sugerido"?filas.sug:c.tipo==="oc"?filas.oc:filas.desp;
     for(const p of ps){
       for(const k in p.desc||{}) desc[normSku(k)]=p.desc[k];
-      for(const f of p.filas) dest.push({cliente:f[0],oc:f[1],sku:normSku(f[2]),talla:f[3],q:f[4],precio:f[5]||0,fecha:c.fecha||"",vence:c.vence||"",carga:c.id,archivo:c.archivo||""});
+      for(const f of p.filas) dest.push({cliente:f[0],oc:f[1],sku:normSku(f[2]),talla:f[3],q:f[4],precio:f[5]||0,fecha:c.fecha||"",vence:c.vence||"",carga:c.id,archivo:c.archivo||"",sug:c.sugerido_id||""});
     }
   }
   return {filas,desc,cargas,ncs:esDemo()&&!S.ncs.length?DEMO.ncs:S.ncs};
@@ -322,7 +331,8 @@ function calcular(){
   const lines=new Map(), ocInfo=new Map();
   for(const r of filas.oc){ if(!inC(r)) continue;
     const ok=r.cliente+"|"+r.oc;
-    let o=ocInfo.get(ok); if(!o){o={cliente:r.cliente,oc:r.oc,fecha:r.fecha,vence:r.vence,cargas:new Set()};ocInfo.set(ok,o);}
+    let o=ocInfo.get(ok); if(!o){o={cliente:r.cliente,oc:r.oc,fecha:r.fecha,vence:r.vence,sugId:"",cargas:new Set()};ocInfo.set(ok,o);}
+    if(r.sug) o.sugId=r.sug;
     o.cargas.add(r.carga); if(r.fecha&&r.fecha<o.fecha)o.fecha=r.fecha; if(r.vence)o.vence=r.vence;
     const k=[r.cliente,r.oc,r.sku,r.talla].join("|");
     let l=lines.get(k); if(!l){l={cliente:r.cliente,oc:r.oc,sku:r.sku,talla:r.talla,ocQ:0,desp:0,precio:0,fecha:r.fecha,envios:[]};lines.set(k,l);}
@@ -360,7 +370,7 @@ function calcular(){
   // Órdenes de compra (historial completo, solo filtro de cliente)
   const ocs=new Map();
   for(const l of Lall){const k=l.cliente+"|"+l.oc; let o=ocs.get(k);
-    if(!o){const i=ocInfo.get(k); o={key:k,cliente:l.cliente,oc:l.oc,fecha:i.fecha,vence:i.vence,ocQ:0,ent:0,desp:0,sobre:0,montoOc:0,montoEnt:0,lineas:0,lineasOk:0,lineasCero:0,sinPrecio:0,envios:new Map(),L:[]};ocs.set(k,o);}
+    if(!o){const i=ocInfo.get(k); o={key:k,cliente:l.cliente,oc:l.oc,fecha:i.fecha,vence:i.vence,sugId:i.sugId,cargaIds:[...i.cargas],ocQ:0,ent:0,desp:0,sobre:0,montoOc:0,montoEnt:0,lineas:0,lineasOk:0,lineasCero:0,sinPrecio:0,envios:new Map(),L:[]};ocs.set(k,o);}
     o.L.push(l); o.ocQ+=l.ocQ;o.ent+=l.ent;o.desp+=l.desp;o.sobre+=l.sobre;o.montoOc+=l.ocQ*l.precio;o.montoEnt+=l.ent*l.precio;o.lineas++;
     if(!l.precio)o.sinPrecio++; if(l.desp>=l.ocQ)o.lineasOk++; if(l.desp===0)o.lineasCero++;
     for(const e of l.envios){const x=o.envios.get(e.carga)||{carga:e.carga,archivo:e.archivo,fecha:e.fecha,q:0,monto:0,auto:false}; x.q+=e.q; x.monto+=e.q*l.precio; x.auto=x.auto||!!e.auto; o.envios.set(e.carga,x);}
@@ -433,29 +443,35 @@ function calcular(){
   return {u,L,Lall,skuList,tallaList,ocList,ocs,T,A,sinOc,pendientes,filas,desc,cargas,ncs,pr};
 }
 
-/* ---------- Sugeridos: cada sugerido contra las OCs que vinieron después ---------- */
+/* ---------- Sugeridos: cada sugerido con sus OCs y lo despachado de cada una ----------
+   Una OC pertenece a un sugerido si se asoció al subirla (o después, desde su detalle).
+   Las OCs sin asociar se asignan al último sugerido del mismo cliente anterior a la OC. */
+function sugeridoPorFecha(cliente,fecha){
+  const sc=R.cargas.filter(c=>c.tipo==="sugerido"&&(c.cliente===cliente||(c.clientes||[]).includes(cliente))&&String(c.fecha)<=String(fecha||"9999"));
+  sc.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.creado).localeCompare(String(a.creado)));
+  return sc[0]?.id||"";
+}
+function sugeridoDeOc(o){ return o.sugId&&R.cargas.some(c=>c.id===o.sugId)?{id:o.sugId,auto:false}:{id:sugeridoPorFecha(o.cliente,o.fecha),auto:true}; }
 function sugeridos(){
-  const {filas,cargas,desc,pr}=R, F=S.filtros;
-  const sc=cargas.filter(c=>c.tipo==="sugerido");
-  const fechasPorCliente=new Map();
-  for(const r of filas.sug){const a=fechasPorCliente.get(r.cliente)||new Set(); a.add(r.fecha); fechasPorCliente.set(r.cliente,a);}
+  const {filas,cargas,desc,pr,ocList}=R, F=S.filtros;
   const out=[];
-  for(const c of sc){
+  for(const c of cargas.filter(c=>c.tipo==="sugerido")){
     const rows=filas.sug.filter(r=>r.carga===c.id&&(!F.cliente||r.cliente===F.cliente)); if(!rows.length) continue;
     const clientes=[...new Set(rows.map(r=>r.cliente))];
-    const ventana=cl=>{const fs=[...(fechasPorCliente.get(cl)||[])].filter(f=>f>c.fecha).sort(); return [c.fecha,fs[0]||"9999"];};
-    const lines=new Map(), ocsSet=new Set();
-    for(const r of rows){const k=r.cliente+"|"+r.sku+"|"+r.talla; const l=lines.get(k)||{cliente:r.cliente,sku:r.sku,talla:r.talla,sug:0,oc:0,precio:pr(r.sku,r.talla,r.precio)}; l.sug+=r.q; lines.set(k,l);}
-    let fuera=0;
-    for(const cl of clientes){const [d,h]=ventana(cl);
-      for(const r of filas.oc){ if(r.cliente!==cl||r.fecha<d||r.fecha>=h) continue; ocsSet.add(r.oc);
-        const l=lines.get(cl+"|"+r.sku+"|"+r.talla); if(l) l.oc+=r.q; else fuera+=r.q; }}
-    const L=[...lines.values()];
-    const sug=L.reduce((s,l)=>s+l.sug,0), oc=L.reduce((s,l)=>s+Math.min(l.oc,l.sug),0), ocTot=L.reduce((s,l)=>s+l.oc,0);
-    const skus=new Map(); for(const l of L){const o=skus.get(l.sku)||{sku:l.sku,desc:desc[l.sku]||"",sug:0,oc:0,tallas:[]}; o.sug+=l.sug;o.oc+=l.oc;o.tallas.push(l); skus.set(l.sku,o);}
+    const ocs=ocList.filter(o=>sugeridoDeOc(o).id===c.id);
+    const lines=new Map();
+    const get=(cl,sku,t)=>{const k=cl+"|"+sku+"|"+t; let l=lines.get(k); if(!l){l={cliente:cl,sku,talla:t,sug:0,oc:0,ent:0,precio:pr(sku,t,0),fuera:true};lines.set(k,l);} return l;};
+    for(const r of rows){const l=get(r.cliente,r.sku,r.talla); l.sug+=r.q; l.fuera=false; if(r.precio>0) l.precio=r.precio;}
+    for(const o of ocs) for(const x of o.L){const l=get(x.cliente,x.sku,x.talla); l.oc+=x.ocQ; l.ent+=x.ent;}
+    const L=[...lines.values()], dentro=L.filter(l=>!l.fuera);
+    const T={sug:0,oc:0,ent:0,ocFuera:0,mSug:0,mOc:0,mEnt:0};
+    for(const l of L){ if(l.fuera){T.ocFuera+=l.oc;} else {T.sug+=l.sug; T.mSug+=l.sug*l.precio;} T.oc+=l.oc; T.ent+=l.ent; T.mOc+=l.oc*l.precio; T.mEnt+=l.ent*l.precio; }
+    const ocDentro=dentro.reduce((s,l)=>s+Math.min(l.oc,l.sug),0);
+    const skus=new Map(); for(const l of L){const o=skus.get(l.sku)||{sku:l.sku,desc:desc[l.sku]||"",sug:0,oc:0,ent:0,tallas:[]}; o.sug+=l.sug;o.oc+=l.oc;o.ent+=l.ent;o.tallas.push(l); skus.set(l.sku,o);}
     const sk=[...skus.values()];
-    out.push({c,clientes,L,sk,ocs:[...ocsSet],sug,ocTot,fuera,conv:sug?oc/sug:null,monto:L.reduce((s,l)=>s+l.sug*l.precio,0),
-      noComprados:sk.filter(o=>o.oc===0).length,nSkus:sk.length});
+    out.push({c,clientes,L,sk,ocs,T,conv:T.sug?ocDentro/T.sug:null,fr:T.oc?T.ent/T.oc:null,avance:T.sug?Math.min(T.ent,T.sug)/T.sug:null,
+      noComprados:sk.filter(o=>o.sug>0&&o.oc===0).length,nSkus:sk.filter(o=>o.sug>0).length,
+      abiertas:ocs.filter(o=>!["Completa","Cerrada"].includes(o.estado)).length});
   }
   return out.sort((a,b)=>String(b.c.fecha).localeCompare(String(a.c.fecha)));
 }
@@ -629,7 +645,8 @@ function vOcDetalle(o){
   <div><button class="btn" data-act="volver-oc">← Todas las OCs</button></div>
   <section class="panel">
     <div class="dh"><div><div class="label">Orden de compra · ${esc(o.cliente)}</div><h2 style="font-size:30px">${esc(o.oc)}</h2>
-      <div class="muted small">Emitida ${fdate(o.fecha)} · Fecha límite ${fdate(o.vence)} · ${o.lineas} líneas SKU-talla</div></div>
+      <div class="muted small">Emitida ${fdate(o.fecha)} · Fecha límite ${fdate(o.vence)} · ${o.lineas} líneas SKU-talla</div>
+      <div class="field" style="margin-top:8px;max-width:420px"><span class="label">Sugerido asociado</span>${selSugerido(o.cliente,sugeridoDeOc(o),`data-ocsug="${esc(o.key)}"`,esDemo())}</div></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${estOc(o.estado)}
         <label class="check" style="padding:0"><input type="checkbox" data-cerrar="${esc(o.key)}" ${o.cerrada?"checked":""}> OC cerrada</label>
         <button class="btn" data-act="nc-desde-oc" data-k="${esc(o.key)}" ${esDemo()?"disabled title=\"Sube tus OCs para crear notas de crédito\"":""}>Crear nota de crédito</button></div></div>
@@ -655,32 +672,57 @@ function vOcDetalle(o){
   </section></div>`;
 }
 
+/* Selector de sugerido para una OC: opciones = sugeridos del mismo cliente */
+function selSugerido(cliente,actual,attrs,disabled){
+  const sc=R.cargas.filter(c=>c.tipo==="sugerido"&&(c.cliente===cliente||(c.clientes||[]).includes(cliente))).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+  return `<select ${attrs} ${disabled?"disabled":""}><option value="">Sin sugerido</option>${sc.map(c=>`<option value="${esc(c.id)}" ${c.id===actual.id?"selected":""}>${fdate(c.fecha)} · ${esc(c.archivo||"Sugerido")}${c.id===actual.id&&actual.auto?" (asignado por fecha)":""}</option>`).join("")}</select>`;
+}
 /* ---------- Sugeridos ---------- */
+function embudo(s){
+  const max=Math.max(s.T.sug,s.T.oc,1), w=v=>Math.max(0,Math.min(100,v/max*100));
+  const fila=(lbl,v,m,cls,nota)=>`<div class="fun-row"><span class="fun-l">${lbl}</span><span class="fun-bar"><i class="${cls}" style="width:${w(v)}%"></i></span><span class="fun-v num">${fmtN(v)} uds${m?` · ${fmt$(m)}`:""}</span><span class="fun-n muted small">${nota}</span></div>`;
+  return `<div class="fun">
+    ${fila("Sugerido",s.T.sug,s.T.mSug,"fun-sug","")}
+    ${fila("En OC",s.T.oc,s.T.mOc,"fun-oc",`${pct(s.conv,0)} del sugerido comprado${s.T.ocFuera?` · ${fmtN(s.T.ocFuera)} uds fuera del sugerido`:""}`)}
+    ${fila("Despachado",s.T.ent,s.T.mEnt,"fun-desp",`fill rate ${pct(s.fr,0)} de lo pedido`)}
+  </div>`;
+}
 function vSugeridos(){
   const list=sugeridos().filter(s=>qmatch(s.c.archivo,...s.clientes));
   if(S.det.sugeridos){const s=list.find(x=>x.c.id===S.det.sugeridos); if(s) return vSugDetalle(s); S.det.sugeridos=null;}
   if(!list.length) return `<div class="panel empty">Todavía no hay sugeridos. Súbelos en <b>Cargas</b> como tipo “Sugerido”.</div>`;
+  const u=R.u;
   return `<div style="display:grid;gap:12px">
-  <p class="how">Cada sugerido se compara con las OCs que el mismo cliente emitió <b>desde la fecha del sugerido hasta el siguiente sugerido</b>. Así ves qué parte de tu recomendación compró y qué dejó fuera.</p>
-  <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Archivo</th><th class="r">SKUs</th><th class="r">Uds sugeridas</th><th class="r">Monto sugerido</th><th class="r">OCs después</th><th class="r">Conversión</th><th class="r">SKUs no comprados</th></tr></thead><tbody>
-  ${list.map(s=>`<tr class="row" data-sug="${esc(s.c.id)}"><td class="mono">${fdate(s.c.fecha)}</td><td>${esc(s.clientes.join(", "))}</td><td>${esc(s.c.archivo)}</td><td class="num r">${s.nSkus}</td><td class="num r">${fmtN(s.sug)}</td><td class="num r">${s.monto?fmt$(s.monto):"—"}</td><td class="num r">${s.ocs.length}</td><td class="r">${s.ocs.length?frBar(s.conv,.8):'<span class="muted small">sin OC aún</span>'}</td><td class="num r">${s.ocs.length?s.noComprados:"—"}</td></tr>`).join("")}
+  <p class="how">Cada sugerido reúne las OCs que nacieron de él y lo que se ha despachado de cada una. <b>Avance</b> = unidades despachadas ÷ unidades sugeridas. Haz clic en un sugerido para ver el detalle.</p>
+  <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Sugerido</th><th class="r">Sugerido</th><th class="r">OCs</th><th class="r">En OC</th><th class="r">Comprado</th><th class="r">Despachado</th><th class="r">Fill rate</th><th class="r">Avance</th></tr></thead><tbody>
+  ${list.map(s=>`<tr class="row" data-sug="${esc(s.c.id)}"><td class="mono">${fdate(s.c.fecha)}</td><td>${esc(s.clientes.join(", "))}</td><td>${esc(s.c.archivo)}</td><td class="num r">${fmtN(s.T.sug)}</td><td class="num r">${s.ocs.length}${s.abiertas?` <span class="muted small">(${s.abiertas} abiertas)</span>`:""}</td><td class="num r">${fmtN(s.T.oc)}</td><td class="num r">${s.ocs.length?pct(s.conv,0):"—"}</td><td class="num r">${fmtN(s.T.ent)}</td><td class="r">${s.T.ent?frBar(s.fr,u):'<span class="muted small">—</span>'}</td><td class="num r"><b>${pct(s.avance,0)}</b></td></tr>`).join("")}
   </tbody></table></div></div>`;
 }
 function vSugDetalle(s){
-  const sk=s.sk.slice().sort((a,b)=>(a.sug?a.oc/a.sug:0)-(b.sug?b.oc/b.sug:0));
+  const u=R.u;
+  const sk=s.sk.slice().sort((a,b)=>(b.sug-a.sug)||(b.oc-a.oc));
   return `<div style="display:grid;gap:16px">
   <div><button class="btn" data-act="volver-sug">← Todos los sugeridos</button></div>
   <section class="panel">
-    <div><div class="label">Sugerido · ${esc(s.clientes.join(", "))}</div><h2 style="font-size:28px">${esc(s.c.archivo||"Sugerido")}</h2><div class="muted small">Enviado ${fdate(s.c.fecha)} · OCs que lo siguieron: ${s.ocs.length?esc(s.ocs.join(", ")):"ninguna todavía"}</div></div>
+    <div><div class="label">Sugerido · ${esc(s.clientes.join(", "))}</div><h2 style="font-size:28px">${esc(s.c.archivo||"Sugerido")}</h2><div class="muted small">Enviado ${fdate(s.c.fecha)} · ${s.ocs.length} OC${s.ocs.length===1?"":"s"} asociada${s.ocs.length===1?"":"s"} · ${s.nSkus} SKUs sugeridos</div></div>
     <div class="kpis">
-      <div class="kpi"><span class="label">Sugerido</span><span class="v">${fmtN(s.sug)}</span><span class="d">uds${s.monto?" · "+fmt$(s.monto):""}</span></div>
-      <div class="kpi"><span class="label">Comprado del sugerido</span><span class="v">${pct(s.conv)}</span><span class="d">${s.nSkus-s.noComprados} de ${s.nSkus} SKUs con OC</span></div>
-      <div class="kpi"><span class="label">Comprado fuera del sugerido</span><span class="v">${fmtN(s.fuera)}</span><span class="d">uds de SKU-tallas que no sugeriste</span></div>
+      <div class="kpi"><span class="label">Comprado del sugerido</span><span class="v">${pct(s.conv,0)}</span><span class="d">${s.nSkus-s.noComprados} de ${s.nSkus} SKUs con OC</span></div>
+      <div class="kpi"><span class="label">Fill rate de las OCs</span><span class="v ${s.T.ent?st(s.fr,u):""}">${s.T.ent?pct(s.fr):"—"}</span><span class="d">${fmtN(s.T.ent)} de ${fmtN(s.T.oc)} uds pedidas</span></div>
+      <div class="kpi"><span class="label">Avance total</span><span class="v">${pct(s.avance,0)}</span><span class="d">del sugerido ya despachado</span></div>
+      <div class="kpi"><span class="label">Pendiente de despacho</span><span class="v ${s.T.oc-s.T.ent>0?"warn":"ok"}">${fmtN(s.T.oc-s.T.ent)}</span><span class="d">uds${s.T.mOc?` · ${fmt$(s.T.mOc-s.T.mEnt)}`:""}</span></div>
     </div>
+    ${embudo(s)}
+  </section>
+  <section class="panel"><div class="panel-h"><h2>OCs de este sugerido</h2><span class="muted small">Para cambiar a qué sugerido pertenece una OC, ábrela.</span></div>
+    ${s.ocs.length?`<div class="tablewrap"><table><thead><tr><th>OC</th><th>Emisión</th><th>Fecha límite</th><th class="r">Uds</th><th class="r">Monto</th><th class="r">Despachado</th><th class="r">Fill rate</th><th>Último despacho</th><th>Estado</th></tr></thead><tbody>
+    ${s.ocs.map(o=>`<tr class="row" data-oc-link="${esc(o.key)}"><td class="mono"><b>${esc(o.oc)}</b>${sugeridoDeOc(o).auto?' <span class="muted small" title="Asociada por fecha">(por fecha)</span>':""}</td><td class="mono">${fdate(o.fecha)}</td><td class="mono">${fdate(o.vence)}</td><td class="num r">${fmtN(o.ocQ)}</td><td class="num r">${o.montoOc?fmt$(o.montoOc):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.desp?frBar(o.fr,u):'<span class="muted">—</span>'}</td><td class="mono">${fdate(o.ultimoDesp)}</td><td>${estOc(o.estado)}</td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="muted small">Todavía no hay OCs asociadas. Al subir una OC de ${esc(s.clientes.join(", "))}, elige este sugerido.</div>`}
   </section>
   <section class="panel"><h2>Por SKU</h2>
-    <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th class="r">Sugerido</th><th class="r">En OC</th><th class="r">Conversión</th><th>Tallas (sugerido → OC)</th></tr></thead><tbody>
-    ${sk.map(o=>`<tr><td class="mono">${esc(o.sku)}</td><td>${esc(o.desc)}</td><td class="num r">${fmtN(o.sug)}</td><td class="num r">${fmtN(o.oc)}</td><td class="num r">${pct(o.sug?o.oc/o.sug:null,0)}</td><td><div class="chips">${sortTallas(o.tallas.map(t=>t.talla)).map(tk=>{const t=o.tallas.find(x=>x.talla===tk); const r=t.sug?t.oc/t.sug:0; return `<span class="chip ${r>=.8?"ok":r>=.5?"warn":"crit"}">${esc(tk)} ${fmtN(t.sug)}→${fmtN(t.oc)}</span>`;}).join("")}</div></td></tr>`).join("")}
+    <div class="legend"><span>Cada talla muestra <b>sugerido → OC → despachado</b></span></div>
+    <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th class="r">Sugerido</th><th class="r">En OC</th><th class="r">Comprado</th><th class="r">Despachado</th><th class="r">Fill rate</th><th>Tallas</th></tr></thead><tbody>
+    ${sk.map(o=>`<tr><td class="mono">${esc(o.sku)}</td><td>${esc(o.desc)}${o.sug===0?' <span class="sev info">fuera del sugerido</span>':""}</td><td class="num r">${o.sug?fmtN(o.sug):"—"}</td><td class="num r">${fmtN(o.oc)}</td><td class="num r">${o.sug?pct(o.oc/o.sug,0):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.oc?frBar(o.ent/o.oc,u):'<span class="muted small">sin OC</span>'}</td>
+      <td><div class="chips">${sortTallas(o.tallas.map(t=>t.talla)).map(tk=>{const t=o.tallas.find(x=>x.talla===tk); const cls=!t.oc?(t.sug?"crit":""):st(t.ent/t.oc,u); return `<span class="chip ${cls}" data-tip="${esc(`Talla ${tk}\nSugerido ${fmtN(t.sug)} · OC ${fmtN(t.oc)} · despachado ${fmtN(t.ent)}`)}">${esc(tk)} ${fmtN(t.sug)}→${fmtN(t.oc)}→${fmtN(t.ent)}</span>`;}).join("")}</div></td></tr>`).join("")}
     </tbody></table></div>
   </section></div>`;
 }
@@ -884,6 +926,7 @@ function vCargas(){
       <div class="field"><span class="label">Cliente *</span><div class="seg" role="radiogroup" aria-label="Cliente">${CLIENTES.map(c=>`<label><input type="radio" name="uCli" value="${c}" ${U.cliente===c?"checked":""}>${c}</label>`).join("")}</div></div>
       ${U.tipo==="sugerido"?"":`<div class="field"><span class="label">N° OC</span><input id="uOc" value="${esc(U.oc)}" placeholder="${U.tipo==="oc"?"Si el archivo no la trae":"Opcional"}"></div>`}
       <div class="field"><span class="label">${U.tipo==="oc"?"Fecha de emisión":U.tipo==="despacho"?"Fecha de despacho":"Fecha de envío"}</span><input id="uFecha" type="date" value="${esc(U.fecha)}"></div>
+      ${U.tipo==="oc"&&U.cliente?`<div class="field" style="flex:1 1 220px"><span class="label">Sugerido al que pertenece</span>${selSugerido(U.cliente,{id:U.sugId??sugeridoPorFecha(U.cliente,U.fecha),auto:U.sugId==null},'id="uSug"',false)}</div>`:""}
       ${U.tipo==="oc"?`<div class="field"><span class="label">Fecha límite de entrega</span><input id="uVence" type="date" value="${esc(U.vence)}"></div>`:""}
     </div>
     <label class="drop" id="drop" tabindex="0"><input type="file" id="uFile" accept=".xlsx,.xls,.csv" hidden>${U.file?`<b>${esc(U.file.name)}</b> · haz clic para cambiarlo`:`Arrastra aquí un Excel o CSV, o haz clic para elegirlo`}</label>
@@ -914,15 +957,16 @@ async function guardar(){
     await API.guardarCarga(metaDe(null,b),b.filas,b.desc);
     resetUp(); S.up.msg=["ok","Carga guardada. Ya está considerada en todas las vistas."];
     await recargar();
-  }catch(e){ U.guardando=false; U.msg=["err","No se pudo guardar: "+errTxt(e)]; }
+  }catch(e){ U.guardando=false; U.msg=["err",/sugerido_id/.test(errTxt(e))?"Falta actualizar la base de datos: corre en Supabase la línea nueva de schema.sql (sugerido_id) y vuelve a guardar.":"No se pudo guardar: "+errTxt(e)]; }
   render();
 }
 function metaDe(id,b){
   const U=S.up, ocs=[...new Set(b.filas.map(f=>f[0]+"|"+f[1]))].filter(k=>!k.endsWith("|")), clientes=[...new Set(b.filas.map(f=>f[0]))];
   const ocLbl=[...new Set(b.filas.map(f=>f[1]).filter(Boolean))];
-  return {id,tipo:U.tipo,cliente:clientes.length===1?clientes[0]:"",clientes:clientes.slice(0,20),ocs:ocs.slice(0,300),ocLbl:ocLbl.length>3?ocLbl.length+" OCs":ocLbl.join(", "),fecha:U.fecha,vence:U.tipo==="oc"?U.vence:"",archivo:U.file?.name||"",creado:new Date().toISOString(),filas:b.filas.length,unidades:b.filas.reduce((s,f)=>s+f[4],0),monto:b.filas.reduce((s,f)=>s+f[4]*f[5],0)};
+  const sugeridoId=U.tipo==="oc"?(U.sugId??sugeridoPorFecha(U.cliente,U.fecha))||null:null;
+  return {id,sugeridoId,tipo:U.tipo,cliente:clientes.length===1?clientes[0]:"",clientes:clientes.slice(0,20),ocs:ocs.slice(0,300),ocLbl:ocLbl.length>3?ocLbl.length+" OCs":ocLbl.join(", "),fecha:U.fecha,vence:U.tipo==="oc"?U.vence:"",archivo:U.file?.name||"",creado:new Date().toISOString(),filas:b.filas.length,unidades:b.filas.reduce((s,f)=>s+f[4],0),monto:b.filas.reduce((s,f)=>s+f[4]*f[5],0)};
 }
-function resetUp(){const t=S.up?.tipo||"oc"; S.up={tipo:t,cliente:"",oc:"",fecha:hoy(),vence:"",file:null,wb:null,sheet:"",aoa:null,hdr:0,map:{},wide:false,sizeCols:[],reemplazar:true,msg:null,guardando:false};}
+function resetUp(){const t=S.up?.tipo||"oc"; S.up={tipo:t,cliente:"",oc:"",fecha:hoy(),vence:"",file:null,wb:null,sheet:"",aoa:null,hdr:0,map:{},wide:false,sizeCols:[],reemplazar:true,msg:null,guardando:false,sugId:null};}
 resetUp();
 /* ---------- Exportar ---------- */
 async function exportar(){
@@ -981,11 +1025,13 @@ let uT; $("#fUmbral").oninput=e=>{const v=Math.max(50,Math.min(100,parseInt(e.ta
 document.addEventListener("change",async e=>{
   const t=e.target, U=S.up;
   if(t.name==="uTipo"){U.tipo=t.value; render(); return;}
-  if(t.name==="uCli"){U.cliente=t.value; render(); return;}
+  if(t.name==="uCli"){U.cliente=t.value; U.sugId=null; render(); return;}
   if(t.id==="uFile"&&t.files[0]){leerArchivo(t.files[0]); return;}
   if(t.id==="uSheet"){U.sheet=t.value; U.formato=null; cargarHoja(); render(); return;}
   if(t.id==="uHdr"){U.hdr=Math.max(0,(parseInt(t.value)||1)-1); aplicarHeader(); render(); return;}
   if(t.id==="ocSoloPend"){S.ocSoloPend=t.checked; render(); return;}
+  if(t.id==="uSug"){U.sugId=t.value; render(); return;}
+  if(t.dataset.ocsug!=null){const o=R.ocs.get(t.dataset.ocsug); if(o){try{await API.setSugeridoOc(o.cargaIds,t.value); await recargar();}catch(e){alertaGlobal(/sugerido_id/.test(errTxt(e))?"Falta actualizar la base de datos: corre en Supabase la línea nueva de schema.sql (sugerido_id).":errTxt(e));}} return;}
   if(t.dataset.map){const f=t.dataset.map; if(f==="talla"&&t.value==="wide"){U.wide=true; if(!U.sizeCols.length) U.sizeCols=(U.aoa[U.hdr]||[]).map((h,i)=>i).filter(i=>esTallaHeader(U.aoa[U.hdr][i]));} else {if(f==="talla") U.wide=false; U.map[f]=parseInt(t.value);} render(); return;}
   if(t.dataset.size!=null){const i=+t.dataset.size; U.sizeCols=t.checked?[...U.sizeCols,i]:U.sizeCols.filter(x=>x!==i); render(); return;}
   if(t.id==="uReemp"){U.reemplazar=t.checked; return;}
@@ -1028,6 +1074,7 @@ async function todas(q){ // pagina de a 1000 filas
 const API={
   async guardarCarga(meta,filas,desc){
     const row={tipo:meta.tipo,cliente:meta.cliente||null,clientes:meta.clientes,ocs:meta.ocs,oc_lbl:meta.ocLbl||null,fecha:meta.fecha||null,vence:meta.vence||null,archivo:meta.archivo,filas:meta.filas,unidades:meta.unidades,monto:meta.monto};
+    if(meta.sugeridoId) row.sugerido_id=meta.sugeridoId;
     const c=chk(await sb.from("cargas").insert(row).select("id").single());
     try{
       for(let i=0;i<filas.length;i+=1000){
@@ -1036,6 +1083,7 @@ const API={
       }
     }catch(e){ await sb.from("cargas").delete().eq("id",c.id); throw e; }
   },
+  async setSugeridoOc(ids,sugId){ chk(await sb.from("cargas").update({sugerido_id:sugId||null}).in("id",ids)); },
   async borrarCarga(id){ chk(await sb.from("cargas").delete().eq("id",id)); delete S.partes[id]; },
   async setEstadoOc(cliente,oc,cerrada){ chk(await sb.from("estado_oc").upsert({cliente,oc,cerrada,actualizado:new Date().toISOString()})); },
   async setConfig(v){ chk(await sb.from("config").upsert({clave:"general",valor:v})); },

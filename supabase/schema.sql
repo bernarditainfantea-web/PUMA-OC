@@ -33,6 +33,9 @@ create table if not exists cargas (
   creado_por text default (auth.jwt() ->> 'email')
 );
 
+-- v2: cada OC puede pertenecer a un sugerido
+alter table cargas add column if not exists sugerido_id uuid references cargas(id) on delete set null;
+
 create table if not exists carga_filas (
   id          bigint generated always as identity primary key,
   carga_id    uuid not null references cargas(id) on delete cascade,
