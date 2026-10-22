@@ -155,6 +155,10 @@ svg .thr{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 4;opacity:.7}
 a{color:var(--accent)}
 .login{min-height:100vh;display:grid;place-items:center;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .login form{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:28px;display:grid;gap:14px;width:min(380px,100%)}
+dialog#dPass{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--surface);color:var(--ink);width:min(380px,calc(100% - 32px))}
+dialog#dPass::backdrop{background:rgba(10,14,20,.45)}
+dialog#dPass form{padding:24px;display:grid;gap:12px}
+dialog#dPass input{font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
 .login input{font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
 body.lector #btnIrCargar,body.lector [data-act=nc-nueva],body.lector [data-act=nc-desde-oc],body.lector [data-act=nc-editar],body.lector [data-ncdel],body.lector [data-del],body.lector .upload-only{display:none!important}
 body.lector [data-ncest],body.lector [data-cerrar]{pointer-events:none;opacity:.7}
@@ -173,6 +177,7 @@ body.editor [data-ncdel]{display:none!important}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <span class="muted small" id="who" style="align-self:center"></span>
+      <button class="btn" id="btnPass">Cambiar contraseña</button>
       <button class="btn" id="btnSalir">Salir</button>
       <button class="btn" id="btnExport" hidden>Descargar Excel</button>
       <button class="btn primary" id="btnIrCargar">Subir archivo</button>
@@ -193,6 +198,14 @@ body.editor [data-ncdel]{display:none!important}
   <main id="view"></main>
 </div>
 <div id="tip" hidden></div>
+<dialog id="dPass"><form id="fPass">
+  <h2>Cambiar contraseña</h2>
+  <div class="field"><span class="label">Nueva contraseña</span><input id="p1" type="password" autocomplete="new-password" minlength="10" required></div>
+  <div class="field"><span class="label">Repítela</span><input id="p2" type="password" autocomplete="new-password" minlength="10" required></div>
+  <p class="muted small" style="margin:0">Mínimo 10 caracteres. No la compartas por chat ni correo.</p>
+  <div id="pMsg"></div>
+  <div class="formrow"><button class="btn primary" type="submit">Guardar</button><button class="btn" type="button" id="pCancel">Cerrar</button></div>
+</form></dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
@@ -1057,6 +1070,14 @@ async function iniciar(session){
   canal.subscribe();
 }
 $("#btnSalir").onclick=()=>sb&&sb.auth.signOut();
+$("#btnPass").onclick=()=>{$("#fPass").reset(); $("#pMsg").innerHTML=""; $("#dPass").showModal();};
+$("#pCancel").onclick=()=>$("#dPass").close();
+$("#fPass").onsubmit=async e=>{e.preventDefault(); const a=$("#p1").value,b=$("#p2").value,m=$("#pMsg");
+  if(a.length<10){m.innerHTML='<div class="msg err">Debe tener al menos 10 caracteres.</div>';return;}
+  if(a!==b){m.innerHTML='<div class="msg err">Las dos contraseñas no coinciden.</div>';return;}
+  const {error}=await sb.auth.updateUser({password:a});
+  m.innerHTML=error?`<div class="msg err">${esc(/same/i.test(error.message)?"Es igual a la contraseña actual. Elige otra.":error.message)}</div>`:'<div class="msg ok">Listo. Desde ahora entras con la contraseña nueva.</div>';
+  if(!error) $("#fPass").reset();};
 if(!sb) pantallaLogin();
 else{
   sb.auth.getSession().then(({data})=>iniciar(data.session));
