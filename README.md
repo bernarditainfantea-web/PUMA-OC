@@ -44,10 +44,11 @@ Para cada persona:
 Todo se organiza por **sugerido**: el sugerido y las OCs que nacen de él, con sus despachos.
 1. **Sugeridos → Nuevo sugerido:** elige el cliente (MELI 1P o MELI 3P), ponle nombre y sube el Excel del sugerido. El formato de sugerido PUMA (hoja con "Cod", "SUGERIDO CARGA UN." y "CURVAS A CARGAR") se lee solo.
 2. **Dentro del sugerido → Cargar OCs:** arrastra una o varias OCs. Quedan asociadas al sugerido.
-3. **Dentro de cada OC → Cargar despachos:** sube uno o varios despachos de esa OC.
-4. **El detalle del sugerido** muestra el avance sugerido → OC → despachado, por OC, SKU y talla.
-5. **Resumen / Por SKU / Por talla / Órdenes de compra:** fill rate y alertas de todas las OCs.
-6. **Notas de crédito:** flujo Solicitada → En revisión → Aprobada → Emitida → Aplicada (o Rechazada).
+3. **Dentro de cada OC → Cargar packing lists:** sube lo que PUMA envía (packing list). Cada archivo trae el N° de OC y se cruza por OC + SKU + talla.
+4. **Dentro de cada OC → Cargar despachos:** sube el despacho ingresado por el cliente. El **fill rate se calcula sobre lo ingresado**; la diferencia packing list − ingresado se muestra como "PL sin ingresar" (en tránsito o diferencia de recepción).
+5. **El detalle del sugerido** muestra el avance sugerido → OC → packing list → ingresado, por OC, SKU y talla.
+6. **Resumen / Por SKU / Por talla / Órdenes de compra:** fill rate y alertas de todas las OCs.
+7. **Notas de crédito:** flujo Solicitada → En revisión → Aprobada → Emitida → Aplicada (o Rechazada).
 
 ## Estructura
 ```

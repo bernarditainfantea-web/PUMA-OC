@@ -36,6 +36,10 @@ create table if not exists cargas (
 -- v2: cada OC puede pertenecer a un sugerido
 alter table cargas add column if not exists sugerido_id uuid references cargas(id) on delete set null;
 
+-- v4: packing list (lo que PUMA envía) como carga aparte del despacho ingresado por el cliente
+alter table cargas drop constraint if exists cargas_tipo_check;
+alter table cargas add constraint cargas_tipo_check check (tipo in ('sugerido','oc','despacho','packing'));
+
 create table if not exists carga_filas (
   id          bigint generated always as identity primary key,
   carga_id    uuid not null references cargas(id) on delete cascade,
