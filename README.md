@@ -1,6 +1,6 @@
 # Control Fill Rate · PUMA
 
-Plataforma web para seguir el ciclo **sugerido → orden de compra → despacho → nota de crédito**, con fill rate por SKU y talla, alertas automáticas, historial de OCs y sugeridos, y gestión de notas de crédito.
+Plataforma web para seguir el ciclo **sugerido → orden de compra → despacho creado → despacho facturado → nota de crédito**, con fill rate por SKU y talla, alertas automáticas, historial de OCs y sugeridos, y gestión de notas de crédito.
 
 - **Sitio:** GitHub Pages, gratis (archivos estáticos: `index.html` + `config.js`).
 - **Datos y login:** Supabase (Postgres + autenticación). Los datos **nunca** quedan en este repositorio.
@@ -52,11 +52,12 @@ La función usa la clave `service_role`, que Supabase le entrega sola en su serv
 Todo se organiza por **sugerido**: el sugerido y las OCs que nacen de él, con sus despachos.
 1. **Sugeridos → Nuevo sugerido:** elige el cliente (MELI 1P o MELI 3P), ponle nombre y sube el Excel del sugerido. El formato de sugerido PUMA (hoja con "Cod", "SUGERIDO CARGA UN." y "CURVAS A CARGAR") se lee solo.
 2. **Dentro del sugerido → Cargar OCs:** arrastra una o varias OCs. Quedan asociadas al sugerido.
-3. **Dentro de cada OC → Cargar packing lists:** sube lo que PUMA envía (packing list). Cada archivo trae el N° de OC y se cruza por OC + SKU + talla.
-4. **Dentro de cada OC → Cargar despachos:** sube el despacho ingresado por el cliente. El **fill rate se calcula sobre lo ingresado**; la diferencia packing list − ingresado se muestra como "PL sin ingresar" (en tránsito o diferencia de recepción).
-5. **El detalle del sugerido** muestra el avance sugerido → OC → packing list → ingresado, por OC, SKU y talla.
-6. **Resumen / Por SKU / Por talla / Órdenes de compra:** fill rate y alertas de todas las OCs.
-7. **Notas de crédito:** flujo Solicitada → En revisión → Aprobada → Emitida → Aplicada (o Rechazada).
+3. **Dentro de cada OC → Cargar despachos creados:** el export SAP de pedidos/despachos creados (columnas OC, Material, Quantity, Material Description) se lee solo.
+4. **Dentro de cada OC → Cargar despachos facturados:** lo facturado. El **fill rate se calcula sobre lo facturado**; lo creado y aún no facturado se muestra como "Creado sin facturar".
+5. **El detalle del sugerido** muestra el avance sugerido → OC → creado → facturado, por OC, SKU y talla.
+6. **Resumen:** dashboard por período (mes o rango de fechas) con sugeridos, OCs ingresadas, despachos creados y facturados, en unidades y $. Debajo, fill rate y alertas.
+7. **Por SKU / Por talla / Órdenes de compra:** fill rate y alertas de todas las OCs.
+8. **Notas de crédito:** flujo Solicitada → En revisión → Aprobada → Emitida → Aplicada (o Rechazada).
 
 ## Estructura
 ```
