@@ -28,6 +28,14 @@ Para cada persona:
    - `editor`: sube archivos y gestiona OCs y notas de crédito.
    - `admin`: además elimina notas de crédito y administra usuarios.
 
+### 2b. Crear usuarios desde la página (pestaña *Usuarios*, solo admin)
+Después del primer admin (creado con los pasos de arriba), los demás usuarios se crean desde la página. Para eso hay que publicar **una vez** la función `usuarios`:
+1. En Supabase: **Edge Functions → Deploy a new function → Via Editor**.
+2. Nombre: `usuarios`. Pega todo el contenido de `supabase/functions/usuarios/index.ts` y pon **Deploy**. Deja activado **Verify JWT**.
+3. Listo: en la página aparece la pestaña **Usuarios** para los admin. Ahí se crea el usuario (correo, rol y clave temporal), se cambia el rol o se elimina.
+
+La función usa la clave `service_role`, que Supabase le entrega sola en su servidor. **Nunca pongas esa clave en `config.js` ni en la página**: daría acceso total a la base a cualquiera.
+
 ### 3. Publicar la página (GitHub Pages, gratis)
 1. Crea una cuenta en [github.com](https://github.com) con tu correo de PUMA.
 2. **New repository** → nombre `puma-oc` → **Public** (Pages gratis exige repo público; el código no contiene datos) → Create.

@@ -529,7 +529,7 @@ const TABS=[["resumen","Resumen"],["sugeridos","Sugeridos"],["ocs","Órdenes de 
 function render(){
   R=calcular();
   renderBanner(); renderFiltros(); renderTabs();
-  const v=$("#view"), V={resumen:vResumen,ocs:vOcs,sugeridos:vSugeridos,sku:vSku,talla:vTalla,nc:vNc}[S.tab]||vResumen;
+  const v=$("#view"), V={resumen:vResumen,ocs:vOcs,sugeridos:vSugeridos,sku:vSku,talla:vTalla,nc:vNc,usuarios:S.rol==="admin"?vUsuarios:null}[S.tab]||vResumen;
   v.innerHTML=V();
   $("#btnExport").hidden=!S.downloads||!R.Lall.length;
 }
@@ -558,7 +558,7 @@ function renderFiltros(){
 function renderTabs(){
   const nAl=R.A.filter(a=>a.sev!=="info").length, nNc=R.ncs.filter(n=>n.estado==="Solicitada"||n.estado==="En revisión").length;
   const badge={resumen:nAl,nc:nNc};
-  $("#tabs").innerHTML=TABS.map(([k,n])=>`<button class="tab" role="tab" data-tab="${k}" aria-selected="${S.tab===k}">${n}${badge[k]?`<span class="count">${badge[k]}</span>`:""}</button>`).join("");
+  $("#tabs").innerHTML=[...TABS,...(S.rol==="admin"?[["usuarios","Usuarios"]]:[])].map(([k,n])=>`<button class="tab" role="tab" data-tab="${k}" aria-selected="${S.tab===k}">${n}${badge[k]?`<span class="count">${badge[k]}</span>`:""}</button>`).join("");
 }
 const frBar=(fr,u)=>`<div class="frcell"><span class="num">${pct(fr)}</span><span class="bar"><i class="bg-${st(fr,u)}" style="width:${Math.min(100,(fr||0)*100)}%"></i></span></div>`;
 const sevLbl={crit:"Crítico",warn:"Bajo",info:"Revisar",ok:"OK"};
@@ -827,6 +827,56 @@ function ncTable(list){
     <td><select class="estsel ${NC_CLS[n.estado]}" data-ncest="${esc(n.id)}" aria-label="Estado de la nota" ${esDemo()&&String(n.id).startsWith("demo")?"disabled":""}>${NC_EST.map(e=>`<option ${e===n.estado?"selected":""}>${e}</option>`).join("")}</select></td>
     <td style="white-space:nowrap">${String(n.id).startsWith("demo")?"":`<button class="btn small-btn" data-act="nc-editar" data-id="${esc(n.id)}">Editar</button> <button class="btn small-btn danger ${S.armado===n.id?"armed":""}" data-ncdel="${esc(n.id)}">${S.armado===n.id?"Confirmar":"Eliminar"}</button>`}</td></tr>`).join("")}
   </tbody></table></div>`;
+}
+/* ---------- Usuarios (solo admin) ----------
+   Crear y eliminar cuentas pasa por la Edge Function "usuarios" (supabase/functions/usuarios):
+   necesita la clave service_role, que no puede estar en la página. Cambiar el rol es un update directo. */
+const ROL_LBL={lector:"Lector · solo mira",editor:"Editor · sube archivos y gestiona OCs y NC",admin:"Admin · además elimina y administra usuarios"};
+async function cargarUsuarios(){
+  try{ S.usuarios=chk(await sb.from("usuarios_permitidos").select("email,rol,nombre,creado").order("email")); }
+  catch(e){ S.usuarios=[]; S.usMsg=["err",errTxt(e)]; }
+  if(S.tab==="usuarios") render();
+}
+async function fnUsuarios(body){
+  const {data,error}=await sb.functions.invoke("usuarios",{body});
+  if(!error) return data;
+  let m=""; try{ m=(await error.context.json()).error; }catch(_){}
+  if(!m&&/Failed to send|404|not found/i.test(error.message||"")) m="Falta publicar la función \"usuarios\" en Supabase (ver README, sección Usuarios).";
+  throw new Error(m||error.message);
+}
+function vUsuarios(){
+  if(!S.usuarios){ cargarUsuarios(); return `<div class="panel empty">Cargando usuarios…</div>`; }
+  const msg=S.usMsg?`<div class="msg ${S.usMsg[0]}">${esc(S.usMsg[1])}</div>`:"";
+  return `<div style="display:grid;gap:16px">
+  <section class="panel"><h2>Crear usuario</h2>
+    <p class="how">La persona entra con este correo y la clave temporal, y la cambia con <b>Cambiar contraseña</b>. Si el correo ya existe, se le pone la clave nueva y el rol elegido.</p>
+    <div class="formrow">
+      <div class="field"><span class="label">Correo *</span><input class="tin" id="usEmail" type="email" autocomplete="off" style="width:260px" placeholder="nombre.apellido@puma.com"></div>
+      <div class="field"><span class="label">Nombre</span><input class="tin" id="usNombre" autocomplete="off" style="width:200px"></div>
+      <div class="field"><span class="label">Rol *</span><select id="usRol">${Object.keys(ROL_LBL).map(r=>`<option value="${r}" ${r==="lector"?"selected":""}>${esc(ROL_LBL[r])}</option>`).join("")}</select></div>
+      <div class="field"><span class="label">Clave temporal * (mín. 10)</span><div style="display:flex;gap:6px"><input class="tin" id="usPass" type="text" autocomplete="new-password" style="width:180px"><button class="btn small-btn" data-act="us-generar" type="button">Generar</button></div></div>
+    </div>
+    <div class="formrow"><button class="btn primary" data-act="us-crear" ${S.usBusy?"disabled":""}>${S.usBusy?"Guardando…":"Crear usuario"}</button></div>
+    <div id="usMsg">${msg}</div>
+  </section>
+  <section class="panel"><div class="panel-h"><h2>Usuarios con acceso</h2><span class="muted small">${S.usuarios.length}</span></div>
+    <div class="tablewrap"><table><thead><tr><th>Correo</th><th>Nombre</th><th>Rol</th><th>Desde</th><th></th></tr></thead><tbody>
+    ${S.usuarios.map(u=>{const yo=u.email===S.email; return `<tr><td class="mono">${esc(u.email)}${yo?' <span class="muted small">(tú)</span>':""}</td><td>${esc(u.nombre||"")}</td>
+      <td><select data-urol="${esc(u.email)}" aria-label="Rol de ${esc(u.email)}" ${yo?'disabled title="No puedes cambiar tu propio rol"':""}>${Object.keys(ROL_LBL).map(r=>`<option ${r===u.rol?"selected":""}>${r}</option>`).join("")}</select></td>
+      <td class="mono">${fdate(String(u.creado||"").slice(0,10))}</td>
+      <td>${yo?"":`<button class="btn small-btn danger ${S.armado==="u:"+u.email?"armed":""}" data-udel="${esc(u.email)}">${S.armado==="u:"+u.email?"Confirmar":"Eliminar"}</button>`}</td></tr>`;}).join("")}
+    </tbody></table></div>
+    <p class="how">Da a cada persona el mínimo rol que necesita. Eliminar borra la cuenta y su acceso; lo que subió se mantiene.</p>
+  </section></div>`;
+}
+async function usCrear(){
+  const v=id=>($("#"+id)?.value||"").trim(), email=v("usEmail").toLowerCase(), password=v("usPass"), rol=v("usRol"), nombre=v("usNombre");
+  const out=m=>{S.usMsg=m; const el=$("#usMsg"); if(el) el.innerHTML=`<div class="msg ${m[0]}">${esc(m[1])}</div>`;};
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return out(["err","Escribe un correo válido."]);
+  if(password.length<10) return out(["err","La clave temporal debe tener al menos 10 caracteres."]);
+  S.usBusy=true; const b=document.querySelector('[data-act="us-crear"]'); if(b){b.disabled=true; b.textContent="Guardando…";}
+  try{ const r=await fnUsuarios({accion:"crear",email,password,rol,nombre}); S.usMsg=["ok",`${r&&r.reactivado?"Usuario actualizado":"Usuario creado"}: ${email} como ${rol}. Pásale la clave temporal por un canal privado.`]; S.usBusy=false; await cargarUsuarios(); }
+  catch(e){ S.usBusy=false; if(b){b.disabled=false; b.textContent="Crear usuario";} out(["err",e.message]); }
 }
 function vNc(){
   const {ncs}=R; const F=S.filtros;
@@ -1201,7 +1251,7 @@ async function exportar(){
 /* ---------- Eventos ---------- */
 function irTab(t){S.tab=t; try{localStorage.setItem("fr_tab",t);}catch(_){} render(); window.scrollTo({top:0});}
 document.addEventListener("click",async e=>{
-  const t=e.target.closest("[data-tab],[data-act],[data-sort],[data-sku],[data-del],[data-oc],[data-oc-link],[data-sug],[data-ocest],[data-ncfil],[data-ncdel]"); if(!t) return;
+  const t=e.target.closest("[data-tab],[data-act],[data-sort],[data-sku],[data-del],[data-oc],[data-oc-link],[data-sug],[data-ocest],[data-ncfil],[data-ncdel],[data-udel]"); if(!t) return;
   if(t.dataset.tab){ if(t.dataset.tab===S.tab){S.det={ocs:null,sugeridos:null};} irTab(t.dataset.tab); return;}
   if(t.dataset.sort){const k=t.dataset.sort; S.sort=S.sort.k===k?{k,dir:-S.sort.dir}:{k,dir:k==="fr"||k==="sku"||k==="desc"?1:-1}; render(); return;}
   if(t.dataset.sku){const s=t.dataset.sku; S.abiertos.has(s)?S.abiertos.delete(s):S.abiertos.add(s); render(); return;}
@@ -1212,8 +1262,11 @@ document.addEventListener("click",async e=>{
   if(t.dataset.ncfil!=null){S.ncEstado=t.dataset.ncfil; render(); return;}
   const arm=(id,fn)=>{ if(S.armado!==id){S.armado=id; render(); setTimeout(()=>{if(S.armado===id){S.armado=null;render();}},4000); return;} S.armado=null; fn(); };
   if(t.dataset.del){const id=t.dataset.del; arm(id,async()=>{const c=S.cargas.find(x=>x.id===id); if(c){t.disabled=true; try{await API.borrarCarga(c.id); await recargar();}catch(e){alertaGlobal(errTxt(e));} } render();}); return;}
+  if(t.dataset.udel){const em=t.dataset.udel; arm("u:"+em,async()=>{ try{await fnUsuarios({accion:"eliminar",email:em}); S.usMsg=["ok",`Se eliminó ${em}.`]; await cargarUsuarios();}catch(e){S.usMsg=["err",e.message]; render();} }); return;}
   if(t.dataset.ncdel){const id=t.dataset.ncdel; arm(id,async()=>{ try{await API.borrarNc(id); await recargar();}catch(e){alertaGlobal(errTxt(e));} render();}); return;}
   const a=t.dataset.act, f=S.ncForm;
+  if(a==="us-crear") usCrear();
+  if(a==="us-generar"){const c="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789", r=crypto.getRandomValues(new Uint32Array(14)); $("#usPass").value=[...r].map(x=>c[x%c.length]).join("");}
   if(a==="vertodas"){S.verTodas=!S.verTodas; render();}
   if(a==="manual"){e.preventDefault(); S.up.manual=!S.up.manual; render();}
   if(a==="guardar") guardar();
@@ -1264,6 +1317,7 @@ document.addEventListener("change",async e=>{
   if(t.dataset.map){const f=t.dataset.map; if(f==="talla"&&t.value==="wide"){U.wide=true; if(!U.sizeCols.length) U.sizeCols=(U.aoa[U.hdr]||[]).map((h,i)=>i).filter(i=>esTallaHeader(U.aoa[U.hdr][i]));} else {if(f==="talla") U.wide=false; U.map[f]=parseInt(t.value);} render(); return;}
   if(t.dataset.size!=null){const i=+t.dataset.size; U.sizeCols=t.checked?[...U.sizeCols,i]:U.sizeCols.filter(x=>x!==i); render(); return;}
   if(t.id==="uReemp"){U.reemplazar=t.checked; return;}
+  if(t.dataset.urol){const em=t.dataset.urol; try{chk(await sb.from("usuarios_permitidos").update({rol:t.value}).eq("email",em)); S.usMsg=["ok",`${em} ahora es ${t.value}.`];}catch(e){S.usMsg=["err",errTxt(e)];} await cargarUsuarios(); return;}
   if(t.dataset.ncest){ncCambiarEstado(t.dataset.ncest,t.value); return;}
   if(t.dataset.nc&&S.ncForm){const k=t.dataset.nc; S.ncForm[k]=t.value; if(k==="cliente"){S.ncForm.oc="";} if(k==="cliente"||k==="oc"||k==="motivo") render(); return;}
   if(t.dataset.cerrar!=null){const [c,o]=t.dataset.cerrar.split("|"); const k=ocKey(c,o); S.estadoOc[k]=t.checked; render();
