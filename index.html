@@ -788,10 +788,13 @@ function vSugDetalle(s){
   ${historiaSugerido(s)}
   ${archivosEvento(s)}
   <section class="panel"><h2>Por SKU</h2>
-    <div class="legend"><span>Cada talla muestra <b>sugerido → OC → despachado</b></span></div>
+    <p class="how">Haz clic en un SKU para ver el detalle por talla: sugerido, OC, despachado y fill rate.</p>
     <div class="tablewrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th class="r">Sugerido</th><th class="r">En OC</th><th class="r">Comprado</th><th class="r">Despachado</th><th class="r">Fill rate</th><th>Tallas</th></tr></thead><tbody>
-    ${sk.map(o=>`<tr><td class="mono">${esc(o.sku)}</td><td>${esc(o.desc)}${o.sug===0?' <span class="sev info">fuera del sugerido</span>':""}${o.slow?` <span class="sev warn" title="NC de slow mover atribuida a este sugerido">slow mover ${fmt$(o.slow)}</span>`:""}</td><td class="num r">${o.sug?fmtN(o.sug):"—"}</td><td class="num r">${fmtN(o.oc)}</td><td class="num r">${o.sug?pct(o.oc/o.sug,0):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.oc?frBar(o.ent/o.oc,u):'<span class="muted small">sin OC</span>'}</td>
-      <td><div class="chips">${sortTallas(o.tallas.map(t=>t.talla)).map(tk=>{const t=o.tallas.find(x=>x.talla===tk); const cls=!t.oc?(t.sug?"crit":""):st(t.ent/t.oc,u); return `<span class="chip ${cls}" data-tip="${esc(`Talla ${tk}\nSugerido ${fmtN(t.sug)} · OC ${fmtN(t.oc)} · despachado ${fmtN(t.ent)}`)}">${esc(tk)} ${fmtN(t.sug)}→${fmtN(t.oc)}→${fmtN(t.ent)}</span>`;}).join("")}</div></td></tr>`).join("")}
+    ${sk.map(o=>{const key=s.c.id+"|"+o.sku, op=S.abiertos.has(key), tks=sortTallas(o.tallas.map(t=>t.talla)), cls=t=>!t.oc?(t.sug?"crit":"na"):st(t.ent/t.oc,u), malas=o.tallas.filter(t=>{const c=cls(t); return c==="crit"||c==="warn";}).length;
+      return `<tr class="row" tabindex="0" data-sku="${esc(key)}" aria-expanded="${op}"><td class="mono">${op?"▾":"▸"} ${esc(o.sku)}</td><td>${esc(o.desc)}${o.sug===0?' <span class="sev info">fuera del sugerido</span>':""}${o.slow?` <span class="sev warn" title="NC de slow mover atribuida a este sugerido">slow mover ${fmt$(o.slow)}</span>`:""}</td><td class="num r">${o.sug?fmtN(o.sug):"—"}</td><td class="num r">${fmtN(o.oc)}</td><td class="num r">${o.sug?pct(o.oc/o.sug,0):"—"}</td><td class="num r">${fmtN(o.ent)}</td><td class="r">${o.oc?frBar(o.ent/o.oc,u):'<span class="muted small">sin OC</span>'}</td>
+      <td class="small">${tks.length} talla${tks.length===1?"":"s"}${o.ent&&malas?` · <span style="color:var(--crit)">${malas} bajo umbral</span>`:""}</td></tr>
+      ${op?`<tr class="detail"><td colspan="8"><div class="curve">${tks.map(tk=>{const t=o.tallas.find(x=>x.talla===tk), c=cls(t);
+        return `<div class="cv ${c}"><span class="tl">${esc(tk)}</span><span class="muted">Sug ${t.sug?fmtN(t.sug):"—"}</span><span class="muted">OC ${fmtN(t.oc)}</span><span class="muted">Desp ${fmtN(t.ent)}</span><span class="fr" style="color:var(--${c==="na"?"muted":c})">${t.oc?pct(t.ent/t.oc,0):"sin OC"}</span></div>`;}).join("")}</div></td></tr>`:""}`;}).join("")}
     </tbody></table></div>
   </section></div>`;
 }
