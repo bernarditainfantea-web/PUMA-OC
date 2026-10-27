@@ -949,6 +949,37 @@ function detectarSugeridoPuma(wb){
 /* Formato fijo de la OC 3P (exportación de líneas de Business Central): una fila por SKU-talla.
    "Nº" = SKU, "Cód. variante" = talla, "Cantidad" (col. M) = unidades, precio = costo unitario menos "% Descuento línea".
    Solo cuentan las líneas de tipo "Artículo". */
+/* Formato fijo del despacho ingresado (export SAP: "OC", "Material", "Quantity", "Material Description").
+   El material trae la talla como sufijo (025998-01-150): el SKU son los dos primeros tramos.
+   La talla es el último tramo de la descripción sin el prefijo de escala ("USOSFA" → OSFA, "INT5" → 5, "UK7.5" → 7.5).
+   Se agregan al final dos columnas calculadas (SKU y Talla) para que el resto de la carga funcione igual. */
+function detectarDespachoSap(wb){
+  for(const name of wb.SheetNames){
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:""});
+    for(let i=0;i<Math.min(10,aoa.length);i++){
+      const H=(aoa[i]||[]).map(nh);
+      const oc=H.indexOf("oc"), mat=H.indexOf("material"), q=H.indexOf("quantity"), de=H.indexOf("material description");
+      if(oc<0||mat<0||q<0||de<0) continue;
+      const n=H.length, f=H.indexOf("created on");
+      const out=aoa.map((r,j)=>{ const x=[...r]; while(x.length<n) x.push("");
+        if(j===i) return [...x,"SKU","Talla"];
+        if(j<i) return [...x,"",""];
+        const sku=String(r[mat]??"").trim().split("-").slice(0,2).join("-");
+        const t=String(r[de]??"").split(",").pop().trim().replace(/^(US|INT|UK|EUR|EU)\s*/i,"");
+        return [...x,sku,t]; });
+      const m=String(aoa[i+1]?.[f]??"").match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      return {sheet:name,aoa:out,hdr:i,fecha:m?`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`:"",map:{sku:n,talla:n+1,oc,cliente:-1,desc:-1,precio:-1,cant:q}};
+    }
+  }
+  return null;
+}
+/* N° de OC con la escritura de la OC ya cargada: "15613" y "015613" son la misma OC */
+function ocCanonica(cliente,oc){
+  const z=s=>String(s).replace(/^0+(?=\d)/,"");
+  if(!oc||!R||!/^\d+$/.test(oc)) return oc;
+  for(const o of R.ocs.values()) if(o.cliente===cliente&&/^\d+$/.test(o.oc)&&z(o.oc)===z(oc)) return o.oc;
+  return oc;
+}
 function detectarOc3P(wb){
   for(const name of wb.SheetNames){
     const aoa=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:""});
@@ -980,7 +1011,7 @@ function construir(U=S.up){
     const r=U.aoa[i]; const sku=normSku(r[m.sku]); if(!sku||/TOTAL/.test(sku)) continue;
     if(m.tipo>=0&&!/^articulo/.test(nh(r[m.tipo]))) continue;
     const cliente=(m.cliente>=0&&normCliente(r[m.cliente]))||U.cliente;
-    const oc=U.tipo==="sugerido"?"":(m.oc>=0?clean(r[m.oc])||U.oc.trim():U.oc.trim());
+    const oc=U.tipo==="sugerido"?"":ocCanonica(cliente,m.oc>=0?clean(r[m.oc])||U.oc.trim():U.oc.trim());
     const dto=m.dto>=0?num(r[m.dto]):0;
     const precio=m.precio>=0?Math.round(num(r[m.precio])*(1-dto/100)*100)/100:0;
     if(m.desc>=0&&r[m.desc]) desc[sku]=clean(r[m.desc]).slice(0,80);
@@ -1092,8 +1123,9 @@ async function loteAgregar(files){
     try{
       const buf=await file.arrayBuffer();
       it.wb=XLSX.read(buf,/\.(csv|txt)$/i.test(file.name)?{type:"array",raw:true}:{type:"array"});
-      const o3=L.tipo==="oc"&&detectarOc3P(it.wb);
-      if(o3){it.formato={tipo:"oc",nombre:"OC 3P",un:-1}; it.manual=false; it.sheet=o3.sheet; it.aoa=o3.aoa; it.hdr=o3.hdr; it.map=o3.map; it.sizeCols=[]; it.wide=false;}
+      const o3=L.tipo==="oc"&&detectarOc3P(it.wb), ds=L.tipo==="despacho"&&detectarDespachoSap(it.wb);
+      if(ds){it.formato={tipo:"despacho",nombre:"Despacho SAP",un:-1}; it.manual=false; it.sheet=ds.sheet; it.aoa=ds.aoa; it.hdr=ds.hdr; it.map=ds.map; it.sizeCols=[]; it.wide=false; if(ds.fecha) it.fecha=ds.fecha;}
+      else if(o3){it.formato={tipo:"oc",nombre:"OC 3P",un:-1}; it.manual=false; it.sheet=o3.sheet; it.aoa=o3.aoa; it.hdr=o3.hdr; it.map=o3.map; it.sizeCols=[]; it.wide=false;}
       else{it.sheet=it.wb.SheetNames[0]; it.aoa=XLSX.utils.sheet_to_json(it.wb.Sheets[it.sheet],{header:1,raw:true,defval:""});
         it.hdr=detectarHeader(it.aoa); const a=autoMap(it.aoa[it.hdr]||[]); it.map=a.map; it.sizeCols=a.sizeCols; it.wide=a.wide;}
       if(L.tipo==="oc"&&it.map.oc<0){const m=file.name.match(/\d{5,}/); if(m) it.oc=m[0];}
