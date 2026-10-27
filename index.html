@@ -922,6 +922,21 @@ function detectarSugeridoPuma(wb){
   }
   return null;
 }
+/* Formato fijo de la OC 3P (exportación de líneas de Business Central): una fila por SKU-talla.
+   "Nº" = SKU, "Cód. variante" = talla, "Cantidad" (col. M) = unidades, precio = costo unitario menos "% Descuento línea".
+   Solo cuentan las líneas de tipo "Artículo". */
+function detectarOc3P(wb){
+  for(const name of wb.SheetNames){
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:""});
+    for(let i=0;i<Math.min(10,aoa.length);i++){
+      const H=(aoa[i]||[]).map(nh);
+      const sku=H.findIndex(h=>h==="nº"||h==="n°"||h==="no"), talla=H.indexOf("cod. variante"), cant=H.indexOf("cantidad");
+      if(sku<0||talla<0||cant<0) continue;
+      return {sheet:name,aoa,hdr:i,map:{sku,talla,oc:-1,cliente:-1,desc:-1,precio:H.findIndex(h=>/^costo unit/.test(h)),cant,dto:H.indexOf("% descuento linea"),tipo:H.indexOf("tipo")}};
+    }
+  }
+  return null;
+}
 function cargarHoja(){
   const U=S.up, ws=U.wb.Sheets[U.sheet];
   U.aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
@@ -939,9 +954,11 @@ function construir(U=S.up){
   if(errores.length) return {filas,desc,errores};
   for(let i=U.hdr+1;i<U.aoa.length;i++){
     const r=U.aoa[i]; const sku=normSku(r[m.sku]); if(!sku||/TOTAL/.test(sku)) continue;
+    if(m.tipo>=0&&!/^articulo/.test(nh(r[m.tipo]))) continue;
     const cliente=(m.cliente>=0&&normCliente(r[m.cliente]))||U.cliente;
     const oc=U.tipo==="sugerido"?"":(m.oc>=0?clean(r[m.oc])||U.oc.trim():U.oc.trim());
-    const precio=m.precio>=0?Math.round(num(r[m.precio])*100)/100:0;
+    const dto=m.dto>=0?num(r[m.dto]):0;
+    const precio=m.precio>=0?Math.round(num(r[m.precio])*(1-dto/100)*100)/100:0;
     if(m.desc>=0&&r[m.desc]) desc[sku]=clean(r[m.desc]).slice(0,80);
     if(U.wide){ for(const c of U.sizeCols){const q=num(r[c]); if(q>0) filas.push([cliente,oc,sku,normTalla(hdrs[c]),q,precio]);} }
     else{ const q=num(r[m.cant]); const t=normTalla(r[m.talla]); if(q>0) filas.push([cliente,oc,sku,t||"S/T",q,precio]); }
@@ -963,7 +980,7 @@ function vMapeo(U,modo){
     if(U.formato&&U.formato.un>=0){totArch=0; for(let i=U.hdr+1;i<U.aoa.length;i++){const r=U.aoa[i]; if(normSku(r[U.map.sku])) totArch+=num(r[U.formato.un]);}}
     const ocultar=U.formato&&!U.manual;
     map=`<section class="panel"><h2>2 · ${ocultar?"Revisa antes de guardar":"Revisa las columnas"}</h2>
-    ${U.formato?`<div class="msg ok"><b>Formato ${esc(U.formato.nombre)} reconocido.</b> Hoja “${esc(U.sheet)}”, ${U.sizeCols.length} columnas de talla (UK)${U.map.precio>=0?`, precio desde “${esc(hdrs[U.map.precio])}”`:""}. <a href="#" data-act="manual">${U.manual?"Ocultar columnas":"Ajustar columnas"}</a></div>`:""}
+    ${U.formato?`<div class="msg ok"><b>Formato ${esc(U.formato.nombre)} reconocido.</b> Hoja “${esc(U.sheet)}”, ${U.wide?`${U.sizeCols.length} columnas de talla (UK)`:`unidades desde “${esc(hdrs[U.map.cant])}”, talla desde “${esc(hdrs[U.map.talla])}”`}${U.map.precio>=0?`, precio desde “${esc(hdrs[U.map.precio])}”${U.map.dto>=0?" menos el descuento de línea":""}`:""}. <a href="#" data-act="manual">${U.manual?"Ocultar columnas":"Ajustar columnas"}</a></div>`:""}
     <div ${ocultar?"hidden":""}>
     <div class="formrow">
       ${U.wb.SheetNames.length>1?`<div class="field"><span class="label">Hoja</span><select id="uSheet">${U.wb.SheetNames.map(n=>`<option ${n===U.sheet?"selected":""}>${esc(n)}</option>`).join("")}</select></div>`:""}
@@ -1050,8 +1067,10 @@ async function loteAgregar(files){
     try{
       const buf=await file.arrayBuffer();
       it.wb=XLSX.read(buf,/\.(csv|txt)$/i.test(file.name)?{type:"array",raw:true}:{type:"array"});
-      it.sheet=it.wb.SheetNames[0]; it.aoa=XLSX.utils.sheet_to_json(it.wb.Sheets[it.sheet],{header:1,raw:true,defval:""});
-      it.hdr=detectarHeader(it.aoa); const a=autoMap(it.aoa[it.hdr]||[]); it.map=a.map; it.sizeCols=a.sizeCols; it.wide=a.wide;
+      const o3=L.tipo==="oc"&&detectarOc3P(it.wb);
+      if(o3){it.formato={tipo:"oc",nombre:"OC 3P",un:-1}; it.manual=false; it.sheet=o3.sheet; it.aoa=o3.aoa; it.hdr=o3.hdr; it.map=o3.map; it.sizeCols=[]; it.wide=false;}
+      else{it.sheet=it.wb.SheetNames[0]; it.aoa=XLSX.utils.sheet_to_json(it.wb.Sheets[it.sheet],{header:1,raw:true,defval:""});
+        it.hdr=detectarHeader(it.aoa); const a=autoMap(it.aoa[it.hdr]||[]); it.map=a.map; it.sizeCols=a.sizeCols; it.wide=a.wide;}
       if(L.tipo==="oc"&&it.map.oc<0){const m=file.name.match(/\d{5,}/); if(m) it.oc=m[0];}
     }catch(e){ it.err="No pude leer el archivo. Sube un .xlsx, .xls o .csv."; }
     L.items.push(it);
