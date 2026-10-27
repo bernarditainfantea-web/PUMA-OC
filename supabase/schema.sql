@@ -36,7 +36,8 @@ create table if not exists cargas (
 -- v2: cada OC puede pertenecer a un sugerido
 alter table cargas add column if not exists sugerido_id uuid references cargas(id) on delete set null;
 
--- v4: packing list (lo que PUMA envía) como carga aparte del despacho ingresado por el cliente
+-- v4: despacho FACTURADO (último paso, base del fill rate). Se guarda con tipo 'packing' por historia;
+--     el tipo 'despacho' es el despacho CREADO (export SAP). Flujo: sugerido → oc → despacho creado → facturado.
 alter table cargas drop constraint if exists cargas_tipo_check;
 alter table cargas add constraint cargas_tipo_check check (tipo in ('sugerido','oc','despacho','packing'));
 
